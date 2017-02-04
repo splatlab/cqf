@@ -21,11 +21,13 @@ Build
 -------
 This library depends on libssl.
 
+```bash
  $ make
  $ ./main 24
+```
 
  The argument to main is the log of the number of slots in the CQF. For example,
- to create a CQF of 2^30 slots, the argument will be 30.
+ to create a CQF with 2^30 slots, the argument will be 30.
 
 Contributing
 ------------
