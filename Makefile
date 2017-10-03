@@ -19,10 +19,14 @@ ifdef P
 endif
 
 CXX = g++ -std=c++11
-CC = g++ -std=c++11
+CC = gcc -std=gnu11
 LD= g++ -std=c++11
 
-CXXFLAGS = -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function
+CXXFLAGS = -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Wno-unused-result \
+-Wno-strict-aliasing -Wno-unused-function
+
+CFLAGS = -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Wno-unused-result \
+-Wno-strict-aliasing -Wno-unused-function -Wno-implicit-function-declaration
 
 LDFLAGS = $(DEBUG) $(PROFILE) $(OPT) -lpthread -lssl -lcrypto -lm
 
@@ -56,7 +60,7 @@ $(TARGETS):
 	$(CXX) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
 %.o: %.c
-	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
+	$(CC) $(CFLAGS) $(INCLUDE) $< -c -o $@
 
 clean:
 	rm -f *.o $(TARGETS)
