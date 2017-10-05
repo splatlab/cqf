@@ -1931,9 +1931,6 @@ int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 	*value = 0;   // for now we are not using value
 	*count = current_count; 
 	
-	qfi->qf->metadata->ndistinct_elts++;
-	qfi->qf->metadata->nelts += current_count;
-
 	/*qfi->current = end_index;*/ 		//get should not change the current index
 																		//of the iterator
 	return 0;
