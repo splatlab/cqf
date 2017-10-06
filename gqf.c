@@ -1389,6 +1389,8 @@ static inline bool insert1(QF *qf, __uint128_t hash, bool lock, bool spin)
 					operation = -1;
 				}
 			}
+		} else {
+			modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
 		}
 
 		if (operation >= 0) {
