@@ -1194,6 +1194,8 @@ static inline void insert1(QF *qf, __uint128_t hash)
 					operation = -1;
 				}
 			}
+		} else {
+			qf->ndistinct_elts++;
 		}
 
 		if (operation >= 0) {
