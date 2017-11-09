@@ -1,6 +1,26 @@
 # cqf
 A General-Purpose Counting Filter: Counting Quotient Filter (CQF)
 
+This work appeared at SIGMOD 2017. If you use this software please cite us:
+--------
+@inproceedings{DBLP:conf/sigmod/PandeyBJP17,
+  author    = {Prashant Pandey and
+               Michael A. Bender and
+               Rob Johnson and
+               Robert Patro},
+  title     = {A General-Purpose Counting Filter: Making Every Bit Count},
+  booktitle = {Proceedings of the 2017 {ACM} International Conference on Management
+               of Data, {SIGMOD} Conference 2017, Chicago, IL, USA, May 14-19, 2017},
+  pages     = {775--787},
+  year      = {2017},
+  crossref  = {DBLP:conf/sigmod/2017},
+  url       = {http://doi.acm.org/10.1145/3035918.3035963},
+  doi       = {10.1145/3035918.3035963},
+  timestamp = {Wed, 10 May 2017 22:12:12 +0200},
+  biburl    = {http://dblp.org/rec/bib/conf/sigmod/PandeyBJP17},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
+}
+
 Overview
 --------
  The CQF supports approximate membership testing and counting the occurrences of
