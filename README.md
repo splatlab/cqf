@@ -2,7 +2,6 @@
 A General-Purpose Counting Filter: Counting Quotient Filter (CQF)
 
 This work appeared at SIGMOD 2017. If you use this software please cite us:
---------
 ```
 @inproceedings{DBLP:conf/sigmod/PandeyBJP17,
   author    = {Prashant Pandey and
