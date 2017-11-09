@@ -3,6 +3,7 @@ A General-Purpose Counting Filter: Counting Quotient Filter (CQF)
 
 This work appeared at SIGMOD 2017. If you use this software please cite us:
 --------
+```
 @inproceedings{DBLP:conf/sigmod/PandeyBJP17,
   author    = {Prashant Pandey and
                Michael A. Bender and
@@ -20,6 +21,7 @@ This work appeared at SIGMOD 2017. If you use this software please cite us:
   biburl    = {http://dblp.org/rec/bib/conf/sigmod/PandeyBJP17},
   bibsource = {dblp computer science bibliography, http://dblp.org}
 }
+```
 
 Overview
 --------
