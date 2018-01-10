@@ -131,7 +131,19 @@ int shift_count[len];
 	void qf_multi_merge(QF *qf_arr[], int nqf, QF *qfr);
 
 #ifdef __cplusplus
-}
+} // extern 'C'
+namespace qf {
+class filter {
+    QF filt_;
+public:
+    filter(uint64_t nslots, uint64_t key_bits, uint64_t value_bits) {
+        qf_init(&filt_, nslots, key_bits, value_bits);
+    }
+    ~filter() {
+        qf_destroy(&filt_);
+    }
+};
+} // namespace qf
 #endif
 
 #endif /* QF_H */
