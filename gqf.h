@@ -3,7 +3,7 @@
  *
  *       Filename:  gqf.h
  *
- *    Description:  
+ *    Description:
  *
  *        Version:  1.0
  *        Created:  2017-02-04 03:40:58 PM
@@ -106,14 +106,14 @@ int shift_count[len];
 
 	/* Returns 0 if the iterator is still valid (i.e. has not reached the
 		 end of the QF. */
-	int qfi_get(QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count);
+	int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count);
 
 	/* Advance to next entry.  Returns whether or not another entry is
 		 found.  */
 	int qfi_next(QFi *qfi);
 
 	/* Check to see if the if the end of the QF */
-	int qfi_end(QFi *qfi); 
+	int qfi_end(const QFi *qfi);
 
 	/* For debugging */
 	void qf_dump(const QF *);
@@ -132,12 +132,107 @@ int shift_count[len];
 
 #ifdef __cplusplus
 } // extern 'C'
+#include <array>
+#include <cstring>
 namespace qf {
 class filter {
     QF filt_;
+    class iterator {
+        QFi it_;
+    public:
+        using TupleType = std::array<uint64_t, 3>;
+        iterator(const filter *filter, uint64_t pos) {
+            qf_iterator((const QF *)filter, &static_cast<QFi &>(*this), pos);
+        }
+        iterator &operator++() {qfi_next(&(QFi &)(*this)); return *this;}
+        iterator operator++(int) {
+            iterator ret(*this);
+            operator++();
+            return ret;
+        }
+        operator QFi &()       {return *(QFi *)this;}
+        operator const QFi &() const {return *(const QFi *)this;}
+        iterator(const iterator &it) {
+            std::memcpy(this, &it, sizeof(it));
+        }
+        int get(uint64_t *key, uint64_t *value, uint64_t *count) const {
+#ifdef __EXCEPTIONS
+            if(qfi_get(&static_cast<const QFi &>(*this), key, value, count)) throw std::runtime_error("Iterator is exhausted.");
+            return 0;
+#else
+            return qfi_get(&static_cast<QFi &>(*this), key, value, count);
+#endif
+        }
+        TupleType get() const {
+            std::array<uint64_t, 3> ret;
+            get(&ret[0], &ret[1], &ret[2]);
+            return ret;
+        }
+        TupleType operator*() const {
+            return get();
+        }
+        template<typename T>
+        bool operator==([[maybe_unused]] const T &val) const {
+            return end();
+        }
+        template<typename T>
+        bool operator!=([[maybe_unused]] const T &val) const {
+            return !operator==(val);
+        }
+        int end() const {
+            return qfi_end(&static_cast<const QFi &>(*this));
+        }
+    };
 public:
+    operator QF &() {
+        return *(QF *)this;
+    }
+    operator const QF &() {
+        return *(const QF *)this;
+    }
     filter(uint64_t nslots, uint64_t key_bits, uint64_t value_bits) {
         qf_init(&filt_, nslots, key_bits, value_bits);
+    }
+    filter(const char *filename) {
+        qf_deserialize(&filt_, filename);
+    }
+    iterator begin() {
+        return iterator(this, 0);
+    }
+    iterator end() const {
+        return iterator(this, 0);
+    }
+    void insert(uint64_t key, uint64_t value, uint64_t count) {
+        qf_insert(&filt_, key, value, count);
+    }
+    void remove(uint64_t key, uint64_t value, uint64_t count) {
+        qf_remove(&filt_, key, value, count);
+    }
+    uint64_t count(uint64_t key) const {
+        return qf_count_key(&filt_, key);
+    }
+    uint64_t count(uint64_t key, uint64_t value) const {
+        return qf_count_key_value(&filt_, key, value);
+    }
+    void dump() const {
+        qf_dump(&filt_);
+    }
+    void query(uint64_t key, uint64_t *value) const {
+        qf_query(&filt_, key, value);
+    }
+    uint64_t query(uint64_t key) const {
+        uint64_t ret;
+        query(key, &ret);
+        return ret;
+    }
+    void replace(uint64_t key, uint64_t oldvalue, uint64_t newvalue) {
+	    qf_replace(&filt_, key, oldvalue, newvalue);
+    }
+    void del(uint64_t key) {
+        qf_delete_key(&filt_, key);
+    }
+    void del(uint64_t key, uint64_t value) {
+	    qf_delete_key_value(&filt_, key, value);
     }
     ~filter() {
         qf_destroy(&filt_);

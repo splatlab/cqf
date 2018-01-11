@@ -532,7 +532,7 @@ static inline void qf_dump_block(const QF *qf, uint64_t i)
 	printf("\n");
 
 	for (j = 0; j < SLOTS_PER_BLOCK; j++)
-		printf("%02lx ", j);
+		printf("%02" PRIx64 " ", j);
 	printf("\n");
 
 	for (j = 0; j < SLOTS_PER_BLOCK; j++)
@@ -563,7 +563,7 @@ void qf_dump(const QF *qf)
 {
 	uint64_t i;
 
-	printf("%lu %lu %lu\n",
+	printf("%" PRIu64 " %" PRIu64 " %" PRIu64 "\n",
 				 qf->nblocks,
 				 qf->ndistinct_elts,
 				 qf->nelts);
@@ -588,17 +588,17 @@ void qf_serialize(const QF *qf, const char *filename)
 	 * right now */
 	tmp_range = qf->range;
 
-	fprintf(fout, "%lu ", qf->nslots);
-	fprintf(fout, "%lu ", qf->xnslots);
-	fprintf(fout, "%lu ", qf->key_bits);
-	fprintf(fout, "%lu ", qf->value_bits);
-	fprintf(fout, "%lu ", qf->key_remainder_bits);
-	fprintf(fout, "%lu ", qf->bits_per_slot);
-	fprintf(fout, "%lu ", tmp_range);
-	fprintf(fout, "%lu ", qf->nblocks);
-	fprintf(fout, "%lu ", qf->nelts);
-	fprintf(fout, "%lu ", qf->ndistinct_elts);
-	fprintf(fout, "%lu ", qf->noccupied_slots);
+	fprintf(fout, "%" PRIu64 " ", qf->nslots);
+	fprintf(fout, "%" PRIu64 " ", qf->xnslots);
+	fprintf(fout, "%" PRIu64 " ", qf->key_bits);
+	fprintf(fout, "%" PRIu64 " ", qf->value_bits);
+	fprintf(fout, "%" PRIu64 " ", qf->key_remainder_bits);
+	fprintf(fout, "%" PRIu64 " ", qf->bits_per_slot);
+	fprintf(fout, "%" PRIu64 " ", tmp_range);
+	fprintf(fout, "%" PRIu64 " ", qf->nblocks);
+	fprintf(fout, "%" PRIu64 " ", qf->nelts);
+	fprintf(fout, "%" PRIu64 " ", qf->ndistinct_elts);
+	fprintf(fout, "%" PRIu64 " ", qf->noccupied_slots);
 
 #if BITS_PER_SLOT == 8 || BITS_PER_SLOT == 16 || BITS_PER_SLOT == 32 || BITS_PER_SLOT == 64
 	assert(qf->nblocks == fwrite(qf->blocks, sizeof(qfblock), qf->nblocks, fout));
@@ -619,17 +619,17 @@ void qf_deserialize(QF *qf, const char *filename)
 		exit(EXIT_FAILURE);
 	}
 
-	fscanf(fin, "%lu ", &qf->nslots);
-	fscanf(fin, "%lu ", &qf->xnslots);
-	fscanf(fin, "%lu ", &qf->key_bits);
-	fscanf(fin, "%lu ", &qf->value_bits);
-	fscanf(fin, "%lu ", &qf->key_remainder_bits);
-	fscanf(fin, "%lu ", &qf->bits_per_slot);
-	fscanf(fin, "%lu ", &tmp_range);
-	fscanf(fin, "%lu ", &qf->nblocks);
-	fscanf(fin, "%lu ", &qf->nelts);
-	fscanf(fin, "%lu ", &qf->ndistinct_elts);
-	fscanf(fin, "%lu ", &qf->noccupied_slots);
+	fscanf(fin, "%" PRIu64 " ", &qf->nslots);
+	fscanf(fin, "%" PRIu64 " ", &qf->xnslots);
+	fscanf(fin, "%" PRIu64 " ", &qf->key_bits);
+	fscanf(fin, "%" PRIu64 " ", &qf->value_bits);
+	fscanf(fin, "%" PRIu64 " ", &qf->key_remainder_bits);
+	fscanf(fin, "%" PRIu64 " ", &qf->bits_per_slot);
+	fscanf(fin, "%" PRIu64 " ", &tmp_range);
+	fscanf(fin, "%" PRIu64 " ", &qf->nblocks);
+	fscanf(fin, "%" PRIu64 " ", &qf->nelts);
+	fscanf(fin, "%" PRIu64 " ", &qf->ndistinct_elts);
+	fscanf(fin, "%" PRIu64 " ", &qf->noccupied_slots);
 
 	/* just a hack to handle __uint128_t value. Don't know a better to handle it
 	 * right now */
@@ -1549,12 +1549,9 @@ int qfi_next(QFi *qfi)
 	}
 }
 
-inline int qfi_end(QFi *qfi)
+inline int qfi_end(const QFi *qfi)
 {
-	if (qfi->current >= qfi->qf->xnslots /*&& is_runend(qfi->qf, qfi->current)*/)
-		return 1;
-	else
-		return 0;
+	return qfi->current >= qfi->qf->xnslots /*&& is_runend(qfi->qf, qfi->current)*/;
 }
 
 /*
