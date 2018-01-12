@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 {
 	QF cf;
 	QFi cfi;
-	uint64_t qbits = atoi(argv[1]);
+	uint64_t qbits = argc > 1 ? atoi(argv[1]): 4;
 	uint64_t nhashbits = qbits + 8;
 	uint64_t nslots = (1ULL << qbits);
 	uint64_t nvals = 250*nslots/1000;

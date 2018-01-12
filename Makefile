@@ -34,7 +34,7 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 
-main:                  main.o 								 gqf.o
+main:				  main.o 								 gqf.o
 
 # dependencies between .o files and .h files
 
@@ -57,6 +57,9 @@ $(TARGETS):
 
 %.o: %.c
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
+
+%: %.cpp gqf.o
+	$(CXX) $(CXXFLAGS) $(INCLUDE) gqf.o $< -o $@
 
 clean:
 	rm -f *.o $(TARGETS)

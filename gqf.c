@@ -1492,7 +1492,7 @@ void qf_iterator(const QF *qf, QFi *qfi, uint64_t position)
 		qfi->current = position;
 }
 
-int qfi_get(QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
+int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 {
 	assert(qfi->run <= qfi->qf->nslots);
 	assert(qfi->current <= qfi->qf->xnslots);

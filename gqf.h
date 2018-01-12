@@ -203,13 +203,13 @@ public:
         return iterator(this, 0);
     }
     void insert(uint64_t key, uint64_t value, uint64_t count) {
-        qf_insert(&filt_, key, value, count);
+        qf_insert(&filt_, key % filt_.range, value, count);
     }
     void remove(uint64_t key, uint64_t value, uint64_t count) {
-        qf_remove(&filt_, key, value, count);
+        qf_remove(&filt_, key % filt_.range, value, count);
     }
     uint64_t count(uint64_t key) const {
-        return qf_count_key(&filt_, key);
+        return qf_count_key(&filt_, key % filt_.range);
     }
     uint64_t count(uint64_t key, uint64_t value) const {
         return qf_count_key_value(&filt_, key, value);
