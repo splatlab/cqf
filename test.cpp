@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
     while(inputs.size() < nvals) inputs.push_back(mt());
     std::fprintf(stderr, "made filter\n");
     for(size_t i(0); i < nvals; ++i) {
-        filt.insert(inputs[i], 0, 16);
+        filt.insert(inputs[i], 0, (i & 15) + 1);
     }
     for(const auto kmer: inputs) {
         const auto count = filt.count(kmer);
