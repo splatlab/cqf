@@ -1449,6 +1449,10 @@ uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value)
 	return 0;
 }
 
+uint64_t qf_count_key(const QF *qf, uint64_t key) {
+    return qf_count_key_value(qf, key, 0);
+}
+
 void qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 {
 	/*uint64_t hash = (key << qf->value_bits) | (value & BITMASK(qf->value_bits));*/

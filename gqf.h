@@ -132,8 +132,10 @@ int shift_count[len];
 
 #ifdef __cplusplus
 } // extern 'C'
+
 #include <array>
 #include <cstring>
+#include <string>
 namespace qf {
 class filter {
     QF filt_;
@@ -150,7 +152,7 @@ class filter {
             operator++();
             return ret;
         }
-        operator QFi &()       {return *(QFi *)this;}
+        operator QFi &()             {return *(QFi *)this;}
         operator const QFi &() const {return *(const QFi *)this;}
         iterator(const iterator &it) {
             std::memcpy(this, &it, sizeof(it));
@@ -185,6 +187,9 @@ class filter {
         }
     };
 public:
+    static std::string tup2str(const std::array<uint64_t, 3> &vals) {
+        return std::string("Key:") + std::to_string(vals[0]) + "|Value:" + std::to_string(vals[1]) + "|Count:" + std::to_string(vals[2]);
+    }
     operator QF &() {
         return *(QF *)this;
     }
@@ -218,6 +223,9 @@ public:
     void dump() const {
         qf_dump(&filt_);
     }
+    void write(const char *filename) { // Write to disk.
+        qf_serialize((const QF *)this, filename);
+    }
     void query(uint64_t key, uint64_t *value) const {
         qf_query(&filt_, key, value);
     }
@@ -238,8 +246,8 @@ public:
     ~filter() {
         qf_destroy(&filt_);
     }
-};
+}; // class filter
 } // namespace qf
-#endif
+#endif // #ifdef __cplusplus
 
 #endif /* QF_H */
