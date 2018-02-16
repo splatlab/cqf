@@ -252,7 +252,7 @@ static inline uint64_t bitselect(uint64_t val, int rank) {
 
 static inline uint64_t bitselectv(const uint64_t val, int ignore, int rank)
 {
-	return bitselect(val & ~BITMASK(ignore % 64), rank);
+	return bitselect(val & ~BITMASK(ignore & 63), rank);
 }
 
 #if BITS_PER_SLOT > 0
@@ -269,12 +269,12 @@ static inline qfblock * get_block(const QF *qf, uint64_t block_index)
 
 static inline int is_runend(const QF *qf, uint64_t index)
 {
-	return (METADATA_WORD(qf, runends, index) >> ((index % SLOTS_PER_BLOCK) % 64)) & 1ULL;
+	return (METADATA_WORD(qf, runends, index) >> ((index & (SLOTS_PER_BLOCK - 1)) & 63)) & 1ULL;
 }
 
 static inline int is_occupied(const QF *qf, uint64_t index)
 {
-	return (METADATA_WORD(qf, occupieds, index) >> ((index % SLOTS_PER_BLOCK) % 64)) & 1ULL;
+	return (METADATA_WORD(qf, occupieds, index) >> ((index & (SLOTS_PER_BLOCK - 1)) & 63)) & 1ULL;
 }
 
 #if BITS_PER_SLOT == 8 || BITS_PER_SLOT == 16 || BITS_PER_SLOT == 32 || BITS_PER_SLOT == 64
@@ -282,7 +282,7 @@ static inline int is_occupied(const QF *qf, uint64_t index)
 static inline uint64_t get_slot(const QF *qf, uint64_t index)
 {
 	assert(index < qf->xnslots);
-	return get_block(qf, index / SLOTS_PER_BLOCK)->slots[index % SLOTS_PER_BLOCK];
+	return get_block(qf, index / SLOTS_PER_BLOCK)->slots[index & (SLOTS_PER_BLOCK - 1)];
 }
 
 static inline void set_slot(const QF *qf, uint64_t index, uint64_t value)
@@ -402,10 +402,7 @@ static inline uint64_t run_end(const QF *qf, uint64_t hash_bucket_index)
 	}
 
 	uint64_t runend_index = SLOTS_PER_BLOCK * runend_block_index + runend_block_offset;
-	if (runend_index < hash_bucket_index)
-		return hash_bucket_index;
-	else
-		return runend_index;
+    return runend_index < hash_bucket_index ? hash_bucket_index: runend_index;
 }
 
 /* find if the given slot is empty. 
@@ -962,13 +959,15 @@ static inline uint64_t decode_counter(const QF *qf, uint64_t index, uint64_t *re
 	digit = get_slot(qf, index + 1);
 
 	if (is_runend(qf, index + 1)) {
-		*count = digit == rem ? 2 : 1;
-		return index + (digit == rem ? 1 : 0);
+        const uint8_t inc = (digit==rem);
+		*count = 1 + inc;
+		return index + inc;
 	}
 
-	if (rem > 0 && digit >= rem) {
-		*count = digit == rem ? 2 : 1;
-		return index + (digit == rem ? 1 : 0);
+	if (rem && digit >= rem) {
+        const uint8_t inc = (digit==rem);
+		*count = inc + 1;
+		return index + inc;
 	}
 
 	if (rem > 0 && digit == 0 && get_slot(qf, index + 2) == rem) {
@@ -977,26 +976,19 @@ static inline uint64_t decode_counter(const QF *qf, uint64_t index, uint64_t *re
 	}
 
 	if (rem == 0 && digit == 0) {
-		if (get_slot(qf, index + 2) == 0) {
-			*count = 3;
-			return index + 2;
-		} else {
-			*count = 2;
-			return index + 1;
-		}
+        const uint8_t inc = (get_slot(qf, index + 2) == 0) + 1;
+        *count = 1 + inc;
+        return index + inc;
 	}
 
 	cnt = 0;
-	base = (1ULL << qf->bits_per_slot) - (rem ? 2 : 1);
+	base = (1ULL << qf->bits_per_slot) - ((rem != 0) + 1);
 
 	end = index + 1;
 	while (digit != rem && !is_runend(qf, end)) {
-		if (digit > rem)
-			digit--;
-		if (digit && rem)
-			digit--;
+        digit -= (digit > rem);
+        digit -= (digit && rem);
 		cnt = cnt * base + digit;
-
 		end++;
 		digit = get_slot(qf, end);
 	}
@@ -1020,8 +1012,7 @@ static inline uint64_t decode_counter(const QF *qf, uint64_t index, uint64_t *re
  * */
 static inline uint64_t next_slot(QF *qf, uint64_t current) 
 {
-	uint64_t rem = get_slot(qf, current);
-	current++;
+	uint64_t rem = get_slot(qf, current++);
 
 	while (get_slot(qf, current) == rem && current <= qf->nslots) {
 		current++;

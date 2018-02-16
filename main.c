@@ -26,7 +26,6 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <openssl/rand.h>
 
 #include "gqf.h"
 
@@ -39,12 +38,19 @@ int main(int argc, char **argv)
     uint64_t nslots = (1ULL << qbits);
     uint64_t nvals = 250*nslots/1000;
     uint64_t *vals;
+    srand(nvals);
 
     /* Initialise the CQF */
     qf_init(&cf, nslots, nhashbits, 0);
 
     /* Generate random values */
     vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
+    {
+        uint16_t *tmp_ptr = (uint16_t*)vals;
+        for(uint64_t i = 0; i < sizeof(*vals) * nvals / sizeof(uint16_t); ++i) {
+            *tmp_ptr++ = rand();
+        }
+    }
     RAND_pseudo_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
     for (uint64_t i = 0; i < nvals; i++) {
         vals[i] = (1 * vals[i]) % cf.range;
