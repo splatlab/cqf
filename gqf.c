@@ -1834,6 +1834,8 @@ void qf_deserialize(QF *qf, const char *filename)
 bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
 							 flag)
 {
+	if (count == 0)
+		return true;
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
 	if (count == 1)
