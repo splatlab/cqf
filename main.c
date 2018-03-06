@@ -41,18 +41,18 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	qf_init(&cf, nslots, nhashbits, 0);
+	qf_init(&cf, nslots, nhashbits, 0, true, "", 0);
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
 	RAND_pseudo_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
 	for (uint64_t i = 0; i < nvals; i++) {
-		vals[i] = (1 * vals[i]) % cf.range;
+		vals[i] = (1 * vals[i]) % cf.metadata->range;
 	}
 
 	/* Insert vals in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
-		qf_insert(&cf, vals[i], 0, 50);
+		qf_insert(&cf, vals[i], 0, 50, LOCK_AND_SPIN);
 	}
 	for (uint64_t i = 0; i < nvals; i++) {
 		uint64_t count = qf_count_key_value(&cf, vals[i], 0);
