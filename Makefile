@@ -34,11 +34,12 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 
-main:                  main.o 								 gqf.o
+main:                  main.o 	gqf.o	hashutil.o
 
 # dependencies between .o files and .h files
 
 main.o: 								 									gqf.h
+hashutil.o: 															hashutil.h
 
 # dependencies between .o files and .cc (or .c) files
 
