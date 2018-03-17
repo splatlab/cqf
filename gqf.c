@@ -860,6 +860,7 @@ static inline void insert_replace_slots_and_shift_remainders_and_runends_and_off
 {
 	uint64_t empties[67];
 	uint64_t i;
+	int64_t j;
 	int64_t ninserts = total_remainders - noverwrites;
 	uint64_t insert_index = overwrite_index + noverwrites;
 
@@ -867,12 +868,12 @@ static inline void insert_replace_slots_and_shift_remainders_and_runends_and_off
 		/* First, shift things to create n empty spaces where we need them. */
 		find_next_n_empty_slots(qf, insert_index, ninserts, empties);
 
-		for (i = 0; i < ninserts - 1; i++)
-			shift_slots(qf, empties[i+1] + 1, empties[i] - 1, i + 1);
+		for (j = 0; j < ninserts - 1; j++)
+			shift_slots(qf, empties[j+1] + 1, empties[j] - 1, j + 1);
 		shift_slots(qf, insert_index, empties[ninserts - 1] - 1, ninserts);
 
-		for (i = 0; i < ninserts - 1; i++)
-			shift_runends(qf, empties[i+1] + 1, empties[i] - 1, i + 1);
+		for (j = 0; j < ninserts - 1; j++)
+			shift_runends(qf, empties[j+1] + 1, empties[j] - 1, j + 1);
 		shift_runends(qf, insert_index, empties[ninserts - 1] - 1, ninserts);
 
 
@@ -910,7 +911,7 @@ static inline void insert_replace_slots_and_shift_remainders_and_runends_and_off
 
 		uint64_t npreceding_empties = 0;
 		for (i = bucket_index / SLOTS_PER_BLOCK + 1; i <= empties[0]/SLOTS_PER_BLOCK; i++) {
-			while (npreceding_empties < ninserts &&
+			while ((int64_t)npreceding_empties < ninserts &&
 						 empties[ninserts - 1 - npreceding_empties]  / SLOTS_PER_BLOCK < i)
 				npreceding_empties++;
 			
@@ -1958,6 +1959,71 @@ bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position)
 	qfi->cur_start_index = position;
 	qfi->cur_length = 1;
 #endif
+
+	if (qfi->current >= qf->metadata->nslots)
+		return false;
+	return true;
+}
+
+bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash)
+{
+	if (hash >= qf->metadata->range) {
+		qfi->current = 0xffffffffffffffff;
+		qfi->qf = qf;
+		return false;
+	}
+
+	qfi->qf = qf;
+	qfi->num_clusters = 0;
+
+	uint64_t hash_remainder   = hash & BITMASK(qf->metadata->bits_per_slot);
+	uint64_t hash_bucket_index = hash >> qf->metadata->bits_per_slot;
+	bool flag = false;
+
+	// If a run starts at "position" move the iterator to point it to the
+	// smallest key greater than or equal to "hash".
+	if (is_occupied(qf, hash_bucket_index)) {
+		uint64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf,
+																																	hash_bucket_index-1)
+			+ 1;
+		if (runstart_index < hash_bucket_index)
+			runstart_index = hash_bucket_index;
+		uint64_t current_remainder, current_count, current_end;
+		do {
+			current_end = decode_counter(qf, runstart_index, &current_remainder,
+																	 &current_count);
+			if (current_remainder >= hash_remainder) {
+				flag = true;
+				break;
+			}
+			runstart_index = current_end + 1;
+		} while (!is_runend(qf, current_end));
+		// found "hash" or smallest key greater than "hash" in this run.
+		if (flag) {
+			qfi->run = hash_bucket_index;
+			qfi->current = runstart_index;
+		}
+	}
+	// If a run doesn't start at "position" or the largest key in the run
+	// starting at "position" is smaller than "hash" then find the start of the
+	// next run.
+	if (!is_occupied(qf, hash_bucket_index) || !flag) {
+		uint64_t position = hash_bucket_index;
+		assert(position < qf->metadata->nslots);
+		uint64_t block_index = position / SLOTS_PER_BLOCK;
+		uint64_t idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
+		if (idx == 64) {
+			while(idx == 64 && block_index < qf->metadata->nblocks) {
+				block_index++;
+				idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
+			}
+		}
+		position = block_index * SLOTS_PER_BLOCK + idx;
+		qfi->run = position;
+		qfi->current = position == 0 ? 0 : run_end(qfi->qf, position-1) + 1;
+		if (qfi->current < position)
+			qfi->current = position;
+	}
 
 	if (qfi->current >= qf->metadata->nslots)
 		return false;
