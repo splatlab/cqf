@@ -111,6 +111,10 @@ extern "C" {
 	bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count,
 								 enum lock flag);
 
+	/* Set the counter for this key/value pair to count. */
+	bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count,
+								 enum lock flag);
+
 	/* Remove count instances of this key/value combination. */
 	bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 								 lock flag);

@@ -1849,6 +1849,23 @@ bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
 		return insert(qf, hash, count, flag);
 }
 
+bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+									lock flag)
+{
+	if (count == 0)
+		return true;
+
+	uint64_t cur_count = qf_count_key_value(qf, key, value);
+	int64_t delta = count - cur_count;
+
+	if (delta == 0)
+		return true;
+	else if (delta > 0)
+		return qf_insert(qf, key, value, delta, flag);
+	else
+		return qf_remove(qf, key, value, labs(delta), flag);
+}
+
 bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
 							 flag)
 {
