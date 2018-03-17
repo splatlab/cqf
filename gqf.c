@@ -1834,6 +1834,10 @@ void qf_deserialize(QF *qf, const char *filename)
 bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
 							 flag)
 {
+	// We fill up the CQF up to 95% load factor.
+	// This is a very conservative check.
+	if (qf->metadata->noccupied_slots >= qf->metadata->xnslots * 0.95)
+		return false;
 	if (count == 0)
 		return true;
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
