@@ -112,11 +112,11 @@ extern "C" {
 								 enum lock flag);
 
 	/* Remove count instances of this key/value combination. */
-	void qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+	bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 								 lock flag);
 
 	/* Remove all instances of this key/value pair. */
-	void qf_delete_key_value(QF *qf, uint64_t key, uint64_t value);
+	bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value);
 
 	/* Remove all instances of this key. */
 	void qf_delete_key(QF *qf, uint64_t key);

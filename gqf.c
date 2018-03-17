@@ -1849,16 +1849,26 @@ bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
 		return insert(qf, hash, count, flag);
 }
 
-/* count = 0 would remove the key completely. */
-void qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
+bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
 							 flag)
 {
 	if (count == 0)
-		count = qf_count_key_value(qf, key, value);
+		return true;
 
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
-	_remove(qf, hash, count, flag);
+	return _remove(qf, hash, count, flag);
+}
+
+bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum lock flag)
+{
+	uint64_t count = qf_count_key_value(qf, key, value);
+	if (count == 0)
+		return true;
+
+	uint64_t hash = (key << qf->metadata->value_bits) | (value &
+																											 BITMASK(qf->metadata->value_bits));
+	return _remove(qf, hash, count, flag);
 }
 
 uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value)
