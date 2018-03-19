@@ -22,12 +22,26 @@ extern "C" {
 	struct __attribute__ ((__packed__)) qfblock;
 	typedef struct qfblock qfblock;
 
-	enum lock {
-		LOCK_NO_SPIN,
-		LOCK_AND_SPIN,
-		NO_LOCK
+	//enum lock {
+		//LOCK_NO_SPIN,
+		//LOCK_AND_SPIN,
+		//NO_LOCK
+	//};
+
+	enum hashmode {
+		DEFAULT,
+		INVERTIBLE,
+		NONE
 	};
 
+	enum lockingmode {
+		LOCKS_FORBIDDEN,
+		LOCKS_OPTIONAL,
+		LOCKS_REQUIRED
+	};
+
+	// The below struct is used to instrument the code.
+	// It is not used in normal operations of the CQF.
 	typedef struct {
 		uint64_t total_time_single;
 		uint64_t total_time_spinning;
@@ -37,6 +51,7 @@ extern "C" {
 
 	typedef struct quotient_filter_mem {
 		int fd;
+		enum lockingmode lock_mode;
 		volatile int metadata_lock;
 		volatile int *locks;
 		wait_time_data *wait_times;
@@ -46,6 +61,7 @@ extern "C" {
 
 	typedef struct quotient_filter_metadata {
 		char filepath[50];
+		enum hashmode hash_mode;
 		uint64_t size;
 		uint32_t seed;
 		uint64_t nslots;
@@ -72,6 +88,8 @@ extern "C" {
 
 	typedef quotient_filter QF;
 
+	// The below struct is used to instrument the code.
+	// It is not used in normal operations of the CQF.
 	typedef struct {
 		uint64_t start_index;
 		uint16_t length;
@@ -99,7 +117,8 @@ extern "C" {
 	do { if (PRINT_DEBUG) qf_dump_metadata(qf); } while (0)
 
 	void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-							 value_bits, bool mem, const char *path, uint32_t seed);
+							 value_bits, enum lockingmode lock, enum hashmode hash, uint32_t
+							 seed);
 
 	void qf_reset(QF *qf);
 
@@ -108,16 +127,13 @@ extern "C" {
 	void qf_copy(QF *dest, const QF *src);
 
 	/* Increment the counter for this key/value pair by count. */
-	bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count,
-								 enum lock flag);
+	bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count);
 
 	/* Set the counter for this key/value pair to count. */
-	bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count,
-								 enum lock flag);
+	bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count);
 
 	/* Remove count instances of this key/value combination. */
-	bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
-								 lock flag);
+	bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count);
 
 	/* Remove all instances of this key/value pair. */
 	bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value);
@@ -177,10 +193,10 @@ extern "C" {
 	void qf_read(QF *qf, const char *path);
 
 	/* merge two QFs into the third one. */
-	void qf_merge(QF *qfa, QF *qfb, QF *qfc, enum lock flag);
+	void qf_merge(QF *qfa, QF *qfb, QF *qfc);
 
 	/* merge multiple QFs into the final QF one. */
-	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr, enum lock flag);
+	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr);
 
 	/* find cosine similarity between two QFs. */
 	uint64_t qf_inner_product(QF *qfa, QF *qfb);

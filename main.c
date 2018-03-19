@@ -1,5 +1,5 @@
 /*
- * =====================================================================================
+ * ============================================================================
  *
  *       Filename:  main_release.c
  *
@@ -14,7 +14,7 @@
  *                  Rob Johnson (rob@cs.stonybrook.edu)
  *   Organization:  Stony Brook University
  *
- * =====================================================================================
+ * ============================================================================
  */
 
 #include <stdio.h>
@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	qf_init(&cf, nslots, nhashbits, 0, true, "", 0);
+	qf_init(&cf, nslots, nhashbits, 0, LOCKS_FORBIDDEN, NONE, 0);
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 
 	/* Insert vals in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
-		qf_insert(&cf, vals[i], 0, 50, LOCK_AND_SPIN);
+		qf_insert(&cf, vals[i], 0, 50);
 	}
 	for (uint64_t i = 0; i < nvals; i++) {
 		uint64_t count = qf_count_key_value(&cf, vals[i], 0);

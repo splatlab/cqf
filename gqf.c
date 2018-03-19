@@ -75,57 +75,56 @@ static __inline__ unsigned long long rdtsc(void)
 }
 
 #ifdef LOG_WAIT_TIME
-static inline bool qf_spin_lock(QF *cf, volatile int *lock, uint64_t idx, 
-																enum lock flag)
+static inline bool qf_spin_lock(QF *qf, volatile int *lock, uint64_t idx)
 {
 	struct timespec start, end;
 	bool ret;
 
 	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
-	if (flag != LOCK_AND_SPIN) {
+	if (qf->mem->locking_mode != LOCKS_REQUIRED) {
 		ret = !__sync_lock_test_and_set(lock, 1);
 		clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-		cf->mem->wait_times[idx].locks_acquired_single_attempt++;
-		cf->mem->wait_times[idx].total_time_single += BILLION * (end.tv_sec -
+		qf->mem->wait_times[idx].locks_acquired_single_attempt++;
+		qf->mem->wait_times[idx].total_time_single += BILLION * (end.tv_sec -
 																												start.tv_sec) +
 			end.tv_nsec - start.tv_nsec;
 	} else {
 		if (!__sync_lock_test_and_set(lock, 1)) {
 			clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-			cf->mem->wait_times[idx].locks_acquired_single_attempt++;
-			cf->mem->wait_times[idx].total_time_single += BILLION * (end.tv_sec -
+			qf->mem->wait_times[idx].locks_acquired_single_attempt++;
+			qf->mem->wait_times[idx].total_time_single += BILLION * (end.tv_sec -
 																													start.tv_sec) +
 			end.tv_nsec - start.tv_nsec;
 		} else {
 			while (__sync_lock_test_and_set(lock, 1))
 				while (*lock);
 			clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-			cf->mem->wait_times[idx].total_time_spinning += BILLION * (end.tv_sec -
+			qf->mem->wait_times[idx].total_time_spinning += BILLION * (end.tv_sec -
 																														start.tv_sec) +
 				end.tv_nsec - start.tv_nsec;
 		}
 		ret = true;
 	}
-	cf->mem->wait_times[idx].locks_taken++;
+	qf->mem->wait_times[idx].locks_taken++;
 
 	return ret;
 
 	/*start = rdtsc();*/
 	/*if (!__sync_lock_test_and_set(lock, 1)) {*/
 		/*clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);*/
-		/*cf->mem->wait_times[idx].locks_acquired_single_attempt++;*/
-		/*cf->mem->wait_times[idx].total_time_single += BILLION * (end.tv_sec -
+		/*qf->mem->wait_times[idx].locks_acquired_single_attempt++;*/
+		/*qf->mem->wait_times[idx].total_time_single += BILLION * (end.tv_sec -
 		 * start.tv_sec) + end.tv_nsec - start.tv_nsec;*/
 	/*} else {*/
 		/*while (__sync_lock_test_and_set(lock, 1))*/
 			/*while (*lock);*/
 		/*clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);*/
-		/*cf->mem->wait_times[idx].total_time_spinning += BILLION * (end.tv_sec -
+		/*qf->mem->wait_times[idx].total_time_spinning += BILLION * (end.tv_sec -
 		 * start.tv_sec) + end.tv_nsec - start.tv_nsec;*/
 	/*}*/
 
 	/*end = rdtsc();*/
-	/*cf->mem->wait_times[idx].locks_taken++;*/
+	/*qf->mem->wait_times[idx].locks_taken++;*/
 	/*return;*/
 }
 #else
@@ -133,9 +132,9 @@ static inline bool qf_spin_lock(QF *cf, volatile int *lock, uint64_t idx,
  * Try to acquire a lock once and return even if the lock is busy.
  * If spin flag is set, then spin until the lock is available.
  */
-static inline bool qf_spin_lock(volatile int *lock, enum lock flag)
+static inline bool qf_spin_lock(volatile int *lock, enum lockingmode flag)
 {
-	if (flag != LOCK_AND_SPIN) {
+	if (flag != LOCKS_REQUIRED) {
 		return !__sync_lock_test_and_set(lock, 1);
 	} else {
 		while (__sync_lock_test_and_set(lock, 1))
@@ -153,30 +152,31 @@ static inline void qf_spin_unlock(volatile int *lock)
 	return;
 }
 
-static bool qf_lock(QF *cf, uint64_t hash_bucket_index, enum lock flag, bool
-										small)
+static bool qf_lock(QF *qf, uint64_t hash_bucket_index, bool small)
 {
 	uint64_t hash_bucket_lock_offset  = hash_bucket_index % NUM_SLOTS_TO_LOCK;
 	if (small) {
 #ifdef LOG_WAIT_TIME
-		if (!qf_spin_lock(cf, &cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
-											hash_bucket_index/NUM_SLOTS_TO_LOCK, flag))
+		if (!qf_spin_lock(qf, &qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
+											hash_bucket_index/NUM_SLOTS_TO_LOCK,
+											qf->mem->lock_mode))
 			return false;
 		if (NUM_SLOTS_TO_LOCK - hash_bucket_lock_offset <= CLUSTER_SIZE) {
-			if (!qf_spin_lock(cf, &cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
-												hash_bucket_index/NUM_SLOTS_TO_LOCK+1, flag)) {
-				qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
+			if (!qf_spin_lock(qf, &qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
+												hash_bucket_index/NUM_SLOTS_TO_LOCK+1,
+												qf->mem->lock_mode)) {
+				qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
 				return false;
 			}
 		}
 #else
-		if (!qf_spin_lock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
-											flag))
+		if (!qf_spin_lock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
+											qf->mem->lock_mode))
 			return false;
 		if (NUM_SLOTS_TO_LOCK - hash_bucket_lock_offset <= CLUSTER_SIZE) {
-			if (!qf_spin_lock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
-												flag)) {
-				qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
+			if (!qf_spin_lock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
+												qf->mem->lock_mode)) {
+				qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
 				return false;
 			}
 		}
@@ -185,48 +185,48 @@ static bool qf_lock(QF *cf, uint64_t hash_bucket_index, enum lock flag, bool
 #ifdef LOG_WAIT_TIME
 		if (hash_bucket_index >= NUM_SLOTS_TO_LOCK && hash_bucket_lock_offset <=
 				CLUSTER_SIZE) {
-			if (!qf_spin_lock(cf,
-												&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1],
-												flag))
+			if (!qf_spin_lock(qf,
+												&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1],
+												qf->mem->lock_mode))
 				return false;
 		}
-		if (!qf_spin_lock(cf,
-											&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
-											flag)) {
+		if (!qf_spin_lock(qf,
+											&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
+											qf->mem->lock_mode)) {
 			if (hash_bucket_index >= NUM_SLOTS_TO_LOCK && hash_bucket_lock_offset <=
 					CLUSTER_SIZE)
-				qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
+				qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
 			return false;
 		}
-		if (!qf_spin_lock(cf, &cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
-											flag)) {
-			qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
+		if (!qf_spin_lock(qf, &qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
+											qf->mem->lock_mode)) {
+			qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
 			if (hash_bucket_index >= NUM_SLOTS_TO_LOCK && hash_bucket_lock_offset <=
 					CLUSTER_SIZE)
-				qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
+				qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
 			return false;
 		}
 #else
 		if (hash_bucket_index >= NUM_SLOTS_TO_LOCK && hash_bucket_lock_offset <=
 				CLUSTER_SIZE) {
 			if
-				(!qf_spin_lock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1],
-											 flag))
+				(!qf_spin_lock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1],
+											 qf->mem->lock_mode))
 				return false;
 		}
-		if (!qf_spin_lock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
-											flag)) {
+		if (!qf_spin_lock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK],
+											qf->mem->lock_mode)) {
 			if (hash_bucket_index >= NUM_SLOTS_TO_LOCK && hash_bucket_lock_offset <=
 					CLUSTER_SIZE)
-				qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
+				qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
 			return false;
 		}
-		if (!qf_spin_lock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
-											flag)) {
-			qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
+		if (!qf_spin_lock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1],
+											qf->mem->lock_mode)) {
+			qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
 			if (hash_bucket_index >= NUM_SLOTS_TO_LOCK && hash_bucket_lock_offset <=
 					CLUSTER_SIZE)
-				qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
+				qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
 			return false;
 		}
 #endif
@@ -234,32 +234,32 @@ static bool qf_lock(QF *cf, uint64_t hash_bucket_index, enum lock flag, bool
 	return true;
 }
 
-static void qf_unlock(QF *cf, uint64_t hash_bucket_index, bool small)
+static void qf_unlock(QF *qf, uint64_t hash_bucket_index, bool small)
 {
 	uint64_t hash_bucket_lock_offset  = hash_bucket_index % NUM_SLOTS_TO_LOCK;
 	if (small) {
 		if (NUM_SLOTS_TO_LOCK - hash_bucket_lock_offset <= CLUSTER_SIZE) {
-			qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1]);
+			qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1]);
 		}
-		qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
+		qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
 	} else {
-		qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1]);
-		qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
+		qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK+1]);
+		qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK]);
 		if (hash_bucket_index >= NUM_SLOTS_TO_LOCK && hash_bucket_lock_offset <=
 				CLUSTER_SIZE)
-			qf_spin_unlock(&cf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
+			qf_spin_unlock(&qf->mem->locks[hash_bucket_index/NUM_SLOTS_TO_LOCK-1]);
 	}
 }
 
-static void modify_metadata(QF *cf, uint64_t *metadata, int cnt)
+static void modify_metadata(QF *qf, uint64_t *metadata, int cnt)
 {
 #ifdef LOG_WAIT_TIME
-	qf_spin_lock(cf, &cf->mem->metadata_lock,cf->num_locks, LOCK_AND_SPIN);
+	qf_spin_lock(qf, &qf->mem->metadata_lock,qf->num_locks, LOCK_AND_SPIN);
 #else
-	qf_spin_lock(&cf->mem->metadata_lock, LOCK_AND_SPIN);
+	qf_spin_lock(&qf->mem->metadata_lock, LOCKS_REQUIRED);
 #endif
 	*metadata = *metadata + cnt;
-	qf_spin_unlock(&cf->mem->metadata_lock);
+	qf_spin_unlock(&qf->mem->metadata_lock);
 	return;
 }
 
@@ -1201,14 +1201,14 @@ static inline uint64_t next_slot(QF *qf, uint64_t current)
 	return current;
 }
 
-static inline bool insert1(QF *qf, __uint128_t hash, enum lock flag)
+static inline bool insert1(QF *qf, __uint128_t hash)
 {
 	uint64_t hash_remainder           = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index        = hash >> qf->metadata->bits_per_slot;
 	uint64_t hash_bucket_block_offset = hash_bucket_index % SLOTS_PER_BLOCK;
 
-	if (flag != NO_LOCK) {
-		if (!qf_lock(qf, hash_bucket_index, flag, /*small*/ true))
+	if (qf->mem->lock_mode != LOCKS_FORBIDDEN) {
+		if (!qf_lock(qf, hash_bucket_index, /*small*/ true))
 			return false;
 	}
 	if (is_empty(qf, hash_bucket_index) /* might_be_empty(qf, hash_bucket_index) && runend_index == hash_bucket_index */) {
@@ -1438,23 +1438,23 @@ static inline bool insert1(QF *qf, __uint128_t hash, enum lock flag)
 			(hash_bucket_block_offset % 64);
 	}
 
-	if (flag != NO_LOCK) {
+	if (qf->mem->lock_mode != LOCKS_FORBIDDEN) {
 		qf_unlock(qf, hash_bucket_index, /*small*/ true);
 	}
 
 	return true;
 }
 
-static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum lock
-													flag)
+static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum
+													lockingmode flag)
 {
 	uint64_t hash_remainder           = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index        = hash >> qf->metadata->bits_per_slot;
 	uint64_t hash_bucket_block_offset = hash_bucket_index % SLOTS_PER_BLOCK;
 	/*uint64_t hash_bucket_lock_offset  = hash_bucket_index % NUM_SLOTS_TO_LOCK;*/
 
-	if (flag != NO_LOCK) {
-		if (!qf_lock(qf, hash_bucket_index, flag, /*small*/ false))
+	if (flag != LOCKS_FORBIDDEN) {
+		if (!qf_lock(qf, hash_bucket_index, /*small*/ false))
 			return false;
 	}
 
@@ -1474,7 +1474,7 @@ static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum lock
 		modify_metadata(qf, &qf->metadata->nelts, 1);
 		/* This trick will, I hope, keep the fast case fast. */
 		if (count > 1) {
-			insert(qf, hash, count - 1, NO_LOCK);
+			insert(qf, hash, count - 1, LOCKS_FORBIDDEN);
 		}
 	} else { /* Non-empty slot */
 		uint64_t new_values[67];
@@ -1546,23 +1546,22 @@ static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum lock
 		modify_metadata(qf, &qf->metadata->nelts, count);
 	}
 
-	if (flag != NO_LOCK) {
+	if (qf->mem->lock_mode != LOCKS_FORBIDDEN) {
 		qf_unlock(qf, hash_bucket_index, /*small*/ false);
 	}
 
 	return true;
 }
 
-inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum lock
-													 flag)
+inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count)
 {
 	uint64_t hash_remainder           = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index        = hash >> qf->metadata->bits_per_slot;
 	uint64_t current_remainder, current_count, current_end;
 	uint64_t new_values[67];
 
-	if (flag != NO_LOCK) {
-		if (!qf_lock(qf, hash_bucket_index, flag, /*small*/ false))
+	if (qf->mem->lock_mode != LOCKS_FORBIDDEN) {
+		if (!qf_lock(qf, hash_bucket_index, /*small*/ false))
 			return false;
 	}
 
@@ -1603,7 +1602,7 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum lock
 	modify_metadata(qf, &qf->metadata->nelts, -count);
 	/*qf->metadata->nelts -= count;*/
 
-	if (flag != NO_LOCK) {
+	if (qf->mem->lock_mode != LOCKS_FORBIDDEN) {
 		qf_unlock(qf, hash_bucket_index, /*small*/ false);
 	}
 
@@ -1615,7 +1614,7 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum lock
  ***********************************************************************/
 
 void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
-						 bool mem, const char * path, uint32_t seed)
+						 enum lockingmode lock, enum hashmode hash, uint32_t seed)
 {
 	uint64_t num_slots, xnslots, nblocks;
 	uint64_t key_remainder_bits, bits_per_slot;
@@ -1643,34 +1642,13 @@ void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
 
 	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
 
-	if (mem) {
-		qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
-		qf->blocks = (qfblock *)calloc(size, 1);
-	} else {
-		int ret;
-		uint64_t mmap_size = size + sizeof(qfmetadata);
+	qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
+	qf->blocks = (qfblock *)calloc(size, 1);
 
-		qf->mem->fd = open(path, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
-		if (qf->mem->fd < 0) {
-			perror("Couldn't open file:\n");
-			exit(EXIT_FAILURE);
-		}
-		ret = fallocate(qf->mem->fd, 0, 0, mmap_size);
-		if (ret < 0) {
-			perror("Couldn't fallocate file:\n");
-			exit(EXIT_FAILURE);
-		}
-		qf->metadata = (qfmetadata *)mmap(NULL, mmap_size, PROT_READ |
-																			PROT_WRITE, MAP_SHARED, qf->mem->fd, 0);
-		ret = madvise(qf->metadata, mmap_size, MADV_RANDOM);
-		if (ret < 0) {
-			perror("Couldn't fallocate file:\n");
-			exit(EXIT_FAILURE);
-		}
-		qf->blocks = (qfblock *)(qf->metadata + 1);
-	}
+	qf->mem->lock_mode = lock;
+	qf->metadata->hash_mode = hash;
 
-	strcpy(qf->metadata->filepath, path);
+	strcpy(qf->metadata->filepath, "");
 	qf->metadata->size = size;
 	qf->metadata->seed = seed;
 	qf->metadata->nslots = num_slots;
@@ -1698,6 +1676,91 @@ void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
 																								 sizeof(wait_time_data));
 #endif
 }
+
+/*void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,*/
+						 /*bool mem, const char * path, uint32_t seed)*/
+/*{*/
+	/*uint64_t num_slots, xnslots, nblocks;*/
+	/*uint64_t key_remainder_bits, bits_per_slot;*/
+	/*uint64_t size;*/
+
+	/*assert(popcnt(nslots) == 1); [> nslots must be a power of 2 <]*/
+	/*num_slots = nslots;*/
+	/*xnslots = nslots + 10*sqrt((double)nslots);*/
+	/*nblocks = (xnslots + SLOTS_PER_BLOCK - 1) / SLOTS_PER_BLOCK;*/
+	/*key_remainder_bits = key_bits;*/
+	/*while (nslots > 1) {*/
+		/*assert(key_remainder_bits > 0);*/
+		/*key_remainder_bits--;*/
+		/*nslots >>= 1;*/
+	/*}*/
+
+	/*bits_per_slot = key_remainder_bits + value_bits;*/
+	/*assert (BITS_PER_SLOT == 0 || BITS_PER_SLOT == qf->metadata->bits_per_slot);*/
+	/*assert(bits_per_slot > 1);*/
+/*#if BITS_PER_SLOT == 8 || BITS_PER_SLOT == 16 || BITS_PER_SLOT == 32 || BITS_PER_SLOT == 64*/
+	/*size = nblocks * sizeof(qfblock);*/
+/*#else*/
+	/*size = nblocks * (sizeof(qfblock) + SLOTS_PER_BLOCK * bits_per_slot / 8);*/
+/*#endif*/
+
+	/*qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);*/
+
+	/*if (mem) {*/
+		/*qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);*/
+		/*qf->blocks = (qfblock *)calloc(size, 1);*/
+	/*} else {*/
+		/*int ret;*/
+		/*uint64_t mmap_size = size + sizeof(qfmetadata);*/
+
+		/*qf->mem->fd = open(path, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);*/
+		/*if (qf->mem->fd < 0) {*/
+			/*perror("Couldn't open file:\n");*/
+			/*exit(EXIT_FAILURE);*/
+		/*}*/
+		/*ret = fallocate(qf->mem->fd, 0, 0, mmap_size);*/
+		/*if (ret < 0) {*/
+			/*perror("Couldn't fallocate file:\n");*/
+			/*exit(EXIT_FAILURE);*/
+		/*}*/
+		/*qf->metadata = (qfmetadata *)mmap(NULL, mmap_size, PROT_READ |*/
+																			/*PROT_WRITE, MAP_SHARED, qf->mem->fd, 0);*/
+		/*ret = madvise(qf->metadata, mmap_size, MADV_RANDOM);*/
+		/*if (ret < 0) {*/
+			/*perror("Couldn't fallocate file:\n");*/
+			/*exit(EXIT_FAILURE);*/
+		/*}*/
+		/*qf->blocks = (qfblock *)(qf->metadata + 1);*/
+	/*}*/
+
+	/*strcpy(qf->metadata->filepath, path);*/
+	/*qf->metadata->size = size;*/
+	/*qf->metadata->seed = seed;*/
+	/*qf->metadata->nslots = num_slots;*/
+	/*qf->metadata->xnslots = xnslots;*/
+	/*qf->metadata->key_bits = key_bits;*/
+	/*qf->metadata->value_bits = value_bits;*/
+	/*qf->metadata->key_remainder_bits = key_remainder_bits;*/
+	/*qf->metadata->bits_per_slot = bits_per_slot;*/
+
+	/*qf->metadata->range = qf->metadata->nslots;*/
+	/*qf->metadata->range <<= qf->metadata->key_remainder_bits;*/
+	/*qf->metadata->nblocks = (qf->metadata->xnslots + SLOTS_PER_BLOCK - 1) /*/
+		/*SLOTS_PER_BLOCK;*/
+	/*qf->metadata->nelts = 0;*/
+	/*qf->metadata->ndistinct_elts = 0;*/
+	/*qf->metadata->noccupied_slots = 0;*/
+	/*qf->metadata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;*/
+
+	/*[> initialize all the locks to 0 <]*/
+	/*qf->mem->metadata_lock = 0;*/
+	/*qf->mem->locks = (volatile int *)calloc(qf->metadata->num_locks,*/
+																					/*sizeof(volatile int));*/
+/*#ifdef LOG_WAIT_TIME*/
+	/*qf->mem->wait_times = (wait_time_data* )calloc(qf->metadata->num_locks+1,*/
+																								 /*sizeof(wait_time_data));*/
+/*#endif*/
+/*}*/
 
 /* The caller should call qf_init on the dest QF before calling this function. 
  */
@@ -1832,8 +1895,7 @@ void qf_deserialize(QF *qf, const char *filename)
 	fclose(fin);
 }
 
-bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
-							 flag)
+bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 {
 	// We fill up the CQF up to 95% load factor.
 	// This is a very conservative check.
@@ -1844,13 +1906,12 @@ bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
 	if (count == 1)
-		return insert1(qf, hash, flag);
+		return insert1(qf, hash);
 	else
-		return insert(qf, hash, count, flag);
+		return insert(qf, hash, count, qf->mem->lock_mode);
 }
 
-bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
-									lock flag)
+bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 {
 	if (count == 0)
 		return true;
@@ -1861,23 +1922,22 @@ bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 	if (delta == 0)
 		return true;
 	else if (delta > 0)
-		return qf_insert(qf, key, value, delta, flag);
+		return qf_insert(qf, key, value, delta);
 	else
-		return qf_remove(qf, key, value, labs(delta), flag);
+		return qf_remove(qf, key, value, labs(delta));
 }
 
-bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum lock
-							 flag)
+bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 {
 	if (count == 0)
 		return true;
 
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
-	return _remove(qf, hash, count, flag);
+	return _remove(qf, hash, count);
 }
 
-bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum lock flag)
+bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value)
 {
 	uint64_t count = qf_count_key_value(qf, key, value);
 	if (count == 0)
@@ -1885,7 +1945,7 @@ bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum lock flag)
 
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
-	return _remove(qf, hash, count, flag);
+	return _remove(qf, hash, count);
 }
 
 uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value)
@@ -2158,7 +2218,7 @@ inline int qfi_end(const QFi *qfi)
  * insert(min, ic) 
  * increment either ia or ib, whichever is minimum.
  */
-void qf_merge(QF *qfa, QF *qfb, QF *qfc, enum lock flag)
+void qf_merge(QF *qfa, QF *qfb, QF *qfc)
 {
 	QFi qfia, qfib;
 	qf_iterator(qfa, &qfia, 0);
@@ -2169,12 +2229,12 @@ void qf_merge(QF *qfa, QF *qfb, QF *qfc, enum lock flag)
 	qfi_get(&qfib, &keyb, &valueb, &countb);
 	do {
 		if (keya < keyb) {
-			qf_insert(qfc, keya, valuea, counta, flag);
+			qf_insert(qfc, keya, valuea, counta);
 			qfi_next(&qfia);
 			qfi_get(&qfia, &keya, &valuea, &counta);
 		}
 		else {
-			qf_insert(qfc, keyb, valueb, countb, flag);
+			qf_insert(qfc, keyb, valueb, countb);
 			qfi_next(&qfib);
 			qfi_get(&qfib, &keyb, &valueb, &countb);
 		}
@@ -2183,13 +2243,13 @@ void qf_merge(QF *qfa, QF *qfb, QF *qfc, enum lock flag)
 	if (!qfi_end(&qfia)) {
 		do {
 			qfi_get(&qfia, &keya, &valuea, &counta);
-			qf_insert(qfc, keya, valuea, counta, flag);
+			qf_insert(qfc, keya, valuea, counta);
 		} while(!qfi_next(&qfia));
 	}
 	if (!qfi_end(&qfib)) {
 		do {
 			qfi_get(&qfib, &keyb, &valueb, &countb);
-			qf_insert(qfc, keyb, valueb, countb, flag);
+			qf_insert(qfc, keyb, valueb, countb);
 		} while(!qfi_next(&qfib));
 	}
 
@@ -2199,7 +2259,7 @@ void qf_merge(QF *qfa, QF *qfb, QF *qfc, enum lock flag)
 /*
  * Merge an array of qfs into the resultant QF
  */
-void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr, enum lock flag)
+void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr)
 {
 	int i;
 	QFi qfi_arr[nqf];
@@ -2229,8 +2289,7 @@ void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr, enum lock flag)
 					smallest_key = keys[i]; smallest_idx = i;
 				}
 			}
-			qf_insert(qfr, keys[smallest_idx], values[smallest_idx], counts[smallest_idx],
-								flag);
+			qf_insert(qfr, keys[smallest_idx], values[smallest_idx], counts[smallest_idx]);
 			qfi_next(&qfi_arr[smallest_idx]);
 			qfi_get(&qfi_arr[smallest_idx], &keys[smallest_idx], &values[smallest_idx],
 							&counts[smallest_idx]);
@@ -2247,7 +2306,7 @@ void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr, enum lock flag)
 		do {
 			uint64_t key, value, count;
 			qfi_get(&qfi_arr[0], &key, &value, &count);
-			qf_insert(qfr, key, value, count, flag);
+			qf_insert(qfr, key, value, count);
 			qfi_next(&qfi_arr[0]);
 			iters++;
 		} while(!qfi_end(&qfi_arr[0]));
@@ -2309,7 +2368,7 @@ void qf_intersect(QF *qfa, QF *qfb, QF *qfr)
 		uint64_t key = 0, value = 0, count = 0;
 		qfi_get(&qfi, &key, &value, &count);
 		if (qf_count_key_value(qf_mem, key, 0) > 0)
-			qf_insert(qfr, key, value, count, NO_LOCK);
+			qf_insert(qfr, key, value, count);
 	} while (!qfi_next(&qfi));
 }
 
