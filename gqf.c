@@ -1735,6 +1735,16 @@ QF *qf_malloc(uint64_t nslots, uint64_t key_bits, uint64_t value_bits, enum
 		return NULL;
 }
 
+bool qf_free(QF *qf)
+{
+	assert(qf->metadata != NULL);
+	free(qf->metadata);
+	if (qf_destroy(qf) == NULL)
+		return true;
+
+	return false;
+}
+
 uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
 								lock)
 {
@@ -1756,6 +1766,15 @@ uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
 #endif
 
 	return sizeof(qfmetadata) + qf->metadata->size;
+}
+
+void *qf_destroy(QF *qf)
+{
+	assert(qf->mem != NULL);
+	free(qf->mem);
+	free(qf);
+
+	return (void*)qf->metadata;
 }
 
 /*void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,*/
@@ -1859,19 +1878,19 @@ void qf_copy(QF *dest, const QF *src)
  *
  * It does not delete the file on disk for on-disk QF.
  */
-void qf_destroy(QF *qf, bool mem)
-{
-	assert(qf->blocks != NULL);
-	if (mem) {
-		free(qf->mem);
-		free(qf->metadata);
-		free(qf->blocks);
-	} else {
-		munmap(qf->metadata, qf->metadata->size + sizeof(qfmetadata));
-		close(qf->mem->fd);
-		remove(qf->metadata->filepath);
-	}
-}
+/*void qf_destroy(QF *qf, bool mem)*/
+/*{*/
+	/*assert(qf->blocks != NULL);*/
+	/*if (mem) {*/
+		/*free(qf->mem);*/
+		/*free(qf->metadata);*/
+		/*free(qf->blocks);*/
+	/*} else {*/
+		/*munmap(qf->metadata, qf->metadata->size + sizeof(qfmetadata));*/
+		/*close(qf->mem->fd);*/
+		/*remove(qf->metadata->filepath);*/
+	/*}*/
+/*}*/
 
 void qf_close(QF *qf)
 {
@@ -1908,8 +1927,8 @@ void qf_read(QF *qf, const char *path)
 		exit(EXIT_FAILURE);
 	}
 
-	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED,
-																qf->mem->fd, 0);
+	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
+																		MAP_SHARED, qf->mem->fd, 0);
 
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 }
@@ -1931,47 +1950,48 @@ void qf_reset(QF *qf)
 #endif
 }
 
-void qf_serialize(const QF *qf, const char *filename)
+uint64_t qf_serialize(const QF *qf, const char *filename)
 {
 	FILE *fout;
 	fout = fopen(filename, "wb+");
 	if (fout == NULL) {
-		perror("Error opening file for serializing\n");
+		perror("Error opening file for serializing.");
 		exit(EXIT_FAILURE);
 	}
-
 	fwrite(qf->metadata, sizeof(qfmetadata), 1, fout);
-
-	/* we don't serialize the locks */
 	fwrite(qf->blocks, qf->metadata->size, 1, fout);
-
 	fclose(fout);
+	
+	return sizeof(qfmetadata) + qf->metadata->size;
 }
 
-void qf_deserialize(QF *qf, const char *filename)
+uint64_t qf_deserialize(QF *qf, const char *filename)
 {
 	FILE *fin;
 	fin = fopen(filename, "rb");
 	if (fin == NULL) {
-		perror("Error opening file for deserializing\n");
+		perror("Error opening file for deserializing.");
 		exit(EXIT_FAILURE);
 	}
 
 	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	if (qf->mem == NULL) {
+		perror("Couldn't allocate memory for runtime data.");
+		exit(EXIT_FAILURE);
+	}
 	qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
-
 	fread(qf->metadata, sizeof(qfmetadata), 1, fin);
-
 	/* initlialize the locks in the QF */
 	qf->metadata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
 	qf->mem->metadata_lock = 0;
 	/* initialize all the locks to 0 */
-	qf->mem->locks = (volatile int *)calloc(qf->metadata->num_locks, sizeof(volatile int));
-
+	qf->mem->locks = (volatile int *)calloc(qf->metadata->num_locks,
+																					sizeof(volatile int));
 	qf->blocks = (qfblock *)calloc(qf->metadata->size, 1);
 	fread(qf->blocks, qf->metadata->size, 1, fin);
-
 	fclose(fin);
+
+	return sizeof(qfmetadata) + qf->metadata->size;
 }
 
 bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)

@@ -120,9 +120,17 @@ extern "C" {
 	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
 									lock);
 
+	void *qf_destroy(QF *qf);
+
+	bool qf_free(QF *qf);
+
 	void qf_reset(QF *qf);
 
-	void qf_destroy(QF *qf, bool mem);
+	/* write data structure of to the disk */
+	uint64_t qf_serialize(const QF *qf, const char *filename);
+
+	/* read data structure off the disk */
+	uint64_t qf_deserialize(QF *qf, const char *filename);
 
 	/* The caller should call qf_init on the dest QF using the same parameters
 	 * as the src QF before calling this function. */
@@ -184,12 +192,6 @@ extern "C" {
 
 	/* For debugging */
 	void qf_dump(const QF *);
-
-	/* write data structure of to the disk */
-	void qf_serialize(const QF *qf, const char *filename);
-
-	/* read data structure off the disk */
-	void qf_deserialize(QF *qf, const char *filename);
 
 	/* mmap the QF from disk. */
 	void qf_read(QF *qf, const char *path);
