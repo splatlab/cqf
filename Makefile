@@ -60,5 +60,5 @@ $(TARGETS):
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
 clean:
-	rm -f *.o $(TARGETS)
+	rm -f *.o $(TARGETS) core
 

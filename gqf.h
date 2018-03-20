@@ -22,12 +22,6 @@ extern "C" {
 	struct __attribute__ ((__packed__)) qfblock;
 	typedef struct qfblock qfblock;
 
-	//enum lock {
-		//LOCK_NO_SPIN,
-		//LOCK_AND_SPIN,
-		//NO_LOCK
-	//};
-
 	enum hashmode {
 		DEFAULT,
 		INVERTIBLE,
@@ -116,14 +110,22 @@ extern "C" {
 #define DEBUG_DUMP(qf) \
 	do { if (PRINT_DEBUG) qf_dump_metadata(qf); } while (0)
 
-	void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-							 value_bits, enum lockingmode lock, enum hashmode hash, uint32_t
-							 seed);
+	uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
+									 value_bits, enum lockingmode lock, enum hashmode hash,
+									 uint32_t seed, void* buffer, uint64_t buffer_len);
+
+	QF *qf_malloc(uint64_t nslots, uint64_t key_bits, uint64_t value_bits, enum
+								lockingmode lock, enum hashmode hash, uint32_t seed);
+
+	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
+									lock);
 
 	void qf_reset(QF *qf);
 
 	void qf_destroy(QF *qf, bool mem);
 
+	/* The caller should call qf_init on the dest QF using the same parameters
+	 * as the src QF before calling this function. */
 	void qf_copy(QF *dest, const QF *src);
 
 	/* Increment the counter for this key/value pair by count. */

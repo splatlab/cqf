@@ -1613,12 +1613,14 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count)
  * Code that uses the above to implement key-value-counter operations. *
  ***********************************************************************/
 
-void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
-						 enum lockingmode lock, enum hashmode hash, uint32_t seed)
+uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
+								 enum lockingmode lock, enum hashmode hash, uint32_t seed,
+								 void* buffer, uint64_t buffer_len)
 {
 	uint64_t num_slots, xnslots, nblocks;
 	uint64_t key_remainder_bits, bits_per_slot;
 	uint64_t size;
+	uint64_t total_num_bytes;
 
 	assert(popcnt(nslots) == 1); /* nslots must be a power of 2 */
 	num_slots = nslots;
@@ -1640,10 +1642,19 @@ void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
 	size = nblocks * (sizeof(qfblock) + SLOTS_PER_BLOCK * bits_per_slot / 8);
 #endif
 
-	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	total_num_bytes = sizeof(qfmetadata) + size;
+	if (total_num_bytes > buffer_len)
+		return total_num_bytes;
 
-	qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
-	qf->blocks = (qfblock *)calloc(size, 1);
+	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	if (qf->mem == NULL) {
+		perror("Couldn't allocate memory for runtime data.");
+		exit(EXIT_FAILURE);
+	}
+
+	memset(buffer, 0, total_num_bytes);
+	qf->metadata = (qfmetadata *)(buffer);
+	qf->blocks = (qfblock *)(qf->metadata + 1);
 
 	qf->mem->lock_mode = lock;
 	qf->metadata->hash_mode = hash;
@@ -1675,6 +1686,76 @@ void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
 	qf->mem->wait_times = (wait_time_data* )calloc(qf->metadata->num_locks+1,
 																								 sizeof(wait_time_data));
 #endif
+
+	return total_num_bytes;
+}
+
+QF *qf_malloc(uint64_t nslots, uint64_t key_bits, uint64_t value_bits, enum
+							lockingmode lock, enum hashmode hash, uint32_t seed)
+{
+	uint64_t num_slots, xnslots, nblocks;
+	uint64_t key_remainder_bits, bits_per_slot;
+	uint64_t size;
+	uint64_t total_num_bytes;
+
+	assert(popcnt(nslots) == 1); /* nslots must be a power of 2 */
+	num_slots = nslots;
+	xnslots = nslots + 10*sqrt((double)nslots);
+	nblocks = (xnslots + SLOTS_PER_BLOCK - 1) / SLOTS_PER_BLOCK;
+	key_remainder_bits = key_bits;
+	while (nslots > 1) {
+		assert(key_remainder_bits > 0);
+		key_remainder_bits--;
+		nslots >>= 1;
+	}
+
+	bits_per_slot = key_remainder_bits + value_bits;
+	assert (BITS_PER_SLOT == 0 || BITS_PER_SLOT == qf->metadata->bits_per_slot);
+	assert(bits_per_slot > 1);
+#if BITS_PER_SLOT == 8 || BITS_PER_SLOT == 16 || BITS_PER_SLOT == 32 || BITS_PER_SLOT == 64
+	size = nblocks * sizeof(qfblock);
+#else
+	size = nblocks * (sizeof(qfblock) + SLOTS_PER_BLOCK * bits_per_slot / 8);
+#endif
+
+	total_num_bytes = sizeof(qfmetadata) + size;
+	void *buffer = malloc(total_num_bytes);
+	if (buffer == NULL) {
+		perror("Couldn't allocate memory for the CQF.");
+		exit(EXIT_FAILURE);
+	}
+
+	QF *qf = (QF*)calloc(sizeof(QF), 1);
+	uint64_t init_size = qf_init(qf, num_slots, key_bits, value_bits, lock, hash,
+															 seed, buffer, total_num_bytes);
+
+	if (init_size == total_num_bytes)
+		return qf;
+	else
+		return NULL;
+}
+
+uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
+								lock)
+{
+	qf->metadata = (qfmetadata *)(buffer);
+	if (qf->metadata->size + sizeof(qfmetadata) > buffer_len) {
+		return qf->metadata->size + sizeof(qfmetadata);
+	}
+	qf->blocks = (qfblock *)(qf->metadata + 1);
+
+	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	qf->mem->lock_mode = lock;
+	/* initialize all the locks to 0 */
+	qf->mem->metadata_lock = 0;
+	qf->mem->locks = (volatile int *)calloc(qf->metadata->num_locks,
+																					sizeof(volatile int));
+#ifdef LOG_WAIT_TIME
+	qf->mem->wait_times = (wait_time_data* )calloc(qf->metadata->num_locks+1,
+																								 sizeof(wait_time_data));
+#endif
+
+	return sizeof(qfmetadata) + qf->metadata->size;
 }
 
 /*void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,*/
@@ -1762,8 +1843,6 @@ void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
 /*#endif*/
 /*}*/
 
-/* The caller should call qf_init on the dest QF before calling this function. 
- */
 void qf_copy(QF *dest, const QF *src)
 {
 	DEBUG_CQF("%s\n","Source CQF");
