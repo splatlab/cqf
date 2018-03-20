@@ -1989,6 +1989,19 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 	return sizeof(qfmetadata) + qf->metadata->size;
 }
 
+bool qf_resize_malloc(QF *qf, uint64_t nslots)
+{
+	QF *new_qf = qf_malloc(nslots, qf->metadata->key_bits,
+												 qf->metadata->value_bits, qf->mem->lock_mode,
+												 qf->metadata->hash_mode, qf->metadata->seed);
+	if (new_qf == NULL)
+		return false;
+	qf_free(qf);
+	qf = new_qf;
+
+	return true;
+}
+
 bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 {
 	// We fill up the CQF up to 95% load factor.

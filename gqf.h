@@ -146,6 +146,8 @@ extern "C" {
 	 * as the src QF before calling this function. */
 	void qf_copy(QF *dest, const QF *src);
 
+	bool qf_resize_malloc(QF *qf, uint64_t nslots);
+
 	/* Increment the counter for this key/value pair by count. */
 	bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count);
 
