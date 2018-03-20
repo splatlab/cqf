@@ -114,13 +114,23 @@ extern "C" {
 									 value_bits, enum lockingmode lock, enum hashmode hash,
 									 uint32_t seed, void* buffer, uint64_t buffer_len);
 
-	QF *qf_malloc(uint64_t nslots, uint64_t key_bits, uint64_t value_bits, enum
-								lockingmode lock, enum hashmode hash, uint32_t seed);
-
 	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
 									lock);
 
 	void *qf_destroy(QF *qf);
+
+	QF *qf_initfile(uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
+									enum lockingmode lock, enum hashmode hash, uint32_t seed,
+									char* filename);
+
+	uint64_t qf_usefile(QF* qf, enum lockingmode lock, char* filename);
+
+	bool qf_closefile(QF* qf);
+
+	bool qf_deletefile(QF* qf);
+
+	QF *qf_malloc(uint64_t nslots, uint64_t key_bits, uint64_t value_bits, enum
+								lockingmode lock, enum hashmode hash, uint32_t seed);
 
 	bool qf_free(QF *qf);
 

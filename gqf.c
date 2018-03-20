@@ -1646,12 +1646,6 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	if (total_num_bytes > buffer_len)
 		return total_num_bytes;
 
-	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
-	if (qf->mem == NULL) {
-		perror("Couldn't allocate memory for runtime data.");
-		exit(EXIT_FAILURE);
-	}
-
 	memset(buffer, 0, total_num_bytes);
 	qf->metadata = (qfmetadata *)(buffer);
 	qf->blocks = (qfblock *)(qf->metadata + 1);
@@ -1726,6 +1720,12 @@ QF *qf_malloc(uint64_t nslots, uint64_t key_bits, uint64_t value_bits, enum
 	}
 
 	QF *qf = (QF*)calloc(sizeof(QF), 1);
+	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	if (qf->mem == NULL) {
+		perror("Couldn't allocate memory for runtime data.");
+		exit(EXIT_FAILURE);
+	}
+
 	uint64_t init_size = qf_init(qf, num_slots, key_bits, value_bits, lock, hash,
 															 seed, buffer, total_num_bytes);
 
@@ -1775,6 +1775,111 @@ void *qf_destroy(QF *qf)
 	free(qf);
 
 	return (void*)qf->metadata;
+}
+
+
+QF *qf_initfile(uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
+								enum lockingmode lock, enum hashmode hash, uint32_t seed,
+								char* filename)
+{
+	uint64_t num_slots, xnslots, nblocks;
+	uint64_t key_remainder_bits, bits_per_slot;
+	uint64_t size;
+	uint64_t total_num_bytes;
+
+	assert(popcnt(nslots) == 1); /* nslots must be a power of 2 */
+	num_slots = nslots;
+	xnslots = nslots + 10*sqrt((double)nslots);
+	nblocks = (xnslots + SLOTS_PER_BLOCK - 1) / SLOTS_PER_BLOCK;
+	key_remainder_bits = key_bits;
+	while (nslots > 1) {
+		assert(key_remainder_bits > 0);
+		key_remainder_bits--;
+		nslots >>= 1;
+	}
+
+	bits_per_slot = key_remainder_bits + value_bits;
+	assert (BITS_PER_SLOT == 0 || BITS_PER_SLOT == qf->metadata->bits_per_slot);
+	assert(bits_per_slot > 1);
+#if BITS_PER_SLOT == 8 || BITS_PER_SLOT == 16 || BITS_PER_SLOT == 32 || BITS_PER_SLOT == 64
+	size = nblocks * sizeof(qfblock);
+#else
+	size = nblocks * (sizeof(qfblock) + SLOTS_PER_BLOCK * bits_per_slot / 8);
+#endif
+
+	int ret;
+	total_num_bytes = sizeof(qfmetadata) + size;
+	QF *qf = (QF*)calloc(sizeof(QF), 1);
+	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	if (qf->mem == NULL) {
+		perror("Couldn't allocate memory for runtime data.");
+		exit(EXIT_FAILURE);
+	}
+	qf->mem->fd = open(filename, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+	if (qf->mem->fd < 0) {
+		perror("Couldn't open file.");
+		exit(EXIT_FAILURE);
+	}
+	ret = fallocate(qf->mem->fd, 0, 0, total_num_bytes);
+	if (ret < 0) {
+		perror("Couldn't fallocate file:\n");
+		exit(EXIT_FAILURE);
+	}
+	qf->metadata = (qfmetadata *)mmap(NULL, total_num_bytes, PROT_READ |
+																		PROT_WRITE, MAP_SHARED, qf->mem->fd, 0);
+	ret = madvise(qf->metadata, total_num_bytes, MADV_RANDOM);
+	if (ret < 0) {
+		perror("Couldn't fallocate file.");
+		exit(EXIT_FAILURE);
+	}
+	qf->blocks = (qfblock *)(qf->metadata + 1);
+
+	uint64_t init_size = qf_init(qf, num_slots, key_bits, value_bits, lock, hash,
+															 seed, qf->metadata, total_num_bytes);
+
+	if (init_size == total_num_bytes)
+		return qf;
+	else
+		return NULL;
+}
+
+uint64_t qf_usefile(QF* qf, enum lockingmode lock, char* filename)
+{
+	struct stat sb;
+	int ret;
+
+	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	qf->mem->fd = open(filename, O_RDWR, S_IRWXU);
+	if (qf->mem->fd < 0) {
+		perror("Couldn't open file.");
+		exit(EXIT_FAILURE);
+	}
+
+	ret = fstat (qf->mem->fd, &sb);
+	if ( ret < 0) {
+		perror ("fstat");
+		exit(EXIT_FAILURE);
+	}
+
+	if (!S_ISREG (sb.st_mode)) {
+		fprintf (stderr, "%s is not a file.", filename);
+		exit(EXIT_FAILURE);
+	}
+
+	qf->mem->lock_mode = lock;
+	/* initialize all the locks to 0 */
+	qf->mem->metadata_lock = 0;
+	qf->mem->locks = (volatile int *)calloc(qf->metadata->num_locks,
+																					sizeof(volatile int));
+#ifdef LOG_WAIT_TIME
+	qf->mem->wait_times = (wait_time_data* )calloc(qf->metadata->num_locks+1,
+																								 sizeof(wait_time_data));
+#endif
+	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
+																		MAP_SHARED, qf->mem->fd, 0);
+	qf->blocks = (qfblock *)(qf->metadata + 1);
+
+	return sizeof(qfmetadata) + qf->metadata->size;
 }
 
 /*void qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,*/
@@ -1904,34 +2009,34 @@ void qf_close(QF *qf)
  * Data won't be copied in memory.
  *
  */
-void qf_read(QF *qf, const char *path)
-{
-	struct stat sb;
-	int ret;
+/*void qf_read(QF *qf, const char *path)*/
+/*{*/
+	/*struct stat sb;*/
+	/*int ret;*/
 
-	qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
-	qf->mem->fd = open(path, O_RDWR, S_IRWXU);
-	if (qf->mem->fd < 0) {
-		perror("Couldn't open file:\n");
-		exit(EXIT_FAILURE);
-	}
+	/*qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);*/
+	/*qf->mem->fd = open(path, O_RDWR, S_IRWXU);*/
+	/*if (qf->mem->fd < 0) {*/
+		/*perror("Couldn't open file:\n");*/
+		/*exit(EXIT_FAILURE);*/
+	/*}*/
 
-	ret = fstat (qf->mem->fd, &sb);
-	if ( ret < 0) {
-		perror ("fstat");
-		exit(EXIT_FAILURE);
-	}
+	/*ret = fstat (qf->mem->fd, &sb);*/
+	/*if ( ret < 0) {*/
+		/*perror ("fstat");*/
+		/*exit(EXIT_FAILURE);*/
+	/*}*/
 
-	if (!S_ISREG (sb.st_mode)) {
-		fprintf (stderr, "%s is not a file\n", path);
-		exit(EXIT_FAILURE);
-	}
+	/*if (!S_ISREG (sb.st_mode)) {*/
+		/*fprintf (stderr, "%s is not a file\n", path);*/
+		/*exit(EXIT_FAILURE);*/
+	/*}*/
 
-	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
-																		MAP_SHARED, qf->mem->fd, 0);
+	/*qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,*/
+																		/*MAP_SHARED, qf->mem->fd, 0);*/
 
-	qf->blocks = (qfblock *)(qf->metadata + 1);
-}
+	/*qf->blocks = (qfblock *)(qf->metadata + 1);*/
+/*}*/
 
 void qf_reset(QF *qf)
 {
