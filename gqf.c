@@ -1996,10 +1996,55 @@ bool qf_resize_malloc(QF *qf, uint64_t nslots)
 												 qf->metadata->hash_mode, qf->metadata->seed);
 	if (new_qf == NULL)
 		return false;
+	// copy keys from qf into new_qf
+	/* Initialize an iterator */
+	QFi qfi;
+	qf_iterator(qf, &qfi, 0);
+	do {
+		uint64_t key, value, count;
+		qfi_get(&qfi, &key, &value, &count);
+		if (qf_insert(new_qf, key, value, count)) {
+			fprintf(stderr, "Failed to insert key: %ld into the new CQF", key);
+			abort();
+		}
+	} while(!qfi_next(&qfi));
+
 	qf_free(qf);
 	qf = new_qf;
 
 	return true;
+}
+
+uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
+{
+	QF *new_qf = (QF*)calloc(sizeof(QF), 1);
+	new_qf->mem = (qfmem *)calloc(sizeof(qfmem), 1);
+	if (new_qf->mem == NULL) {
+		perror("Couldn't allocate memory for runtime data.");
+		exit(EXIT_FAILURE);
+	}
+
+	uint64_t init_size = qf_init(new_qf, nslots, qf->metadata->key_bits,
+															 qf->metadata->value_bits, qf->mem->lock_mode,
+															 qf->metadata->hash_mode, qf->metadata->seed,
+															 buffer, buffer_len);
+
+	if (init_size > buffer_len)
+		return init_size;
+	// copy keys from qf into new_qf
+	/* Initialize an iterator */
+	QFi qfi;
+	qf_iterator(qf, &qfi, 0);
+	do {
+		uint64_t key, value, count;
+		qfi_get(&qfi, &key, &value, &count);
+		if (qf_insert(new_qf, key, value, count)) {
+			fprintf(stderr, "Failed to insert key: %ld into the new CQF", key);
+			abort();
+		}
+	} while(!qfi_next(&qfi));
+
+	return init_size;
 }
 
 bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)

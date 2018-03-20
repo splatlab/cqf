@@ -56,6 +56,7 @@ extern "C" {
 	typedef struct quotient_filter_metadata {
 		char filepath[50];
 		enum hashmode hash_mode;
+		uint32_t auto_resize;
 		uint64_t size;
 		uint32_t seed;
 		uint64_t nslots;
@@ -147,6 +148,9 @@ extern "C" {
 	void qf_copy(QF *dest, const QF *src);
 
 	bool qf_resize_malloc(QF *qf, uint64_t nslots);
+
+	uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t
+										 buffer_len);
 
 	/* Increment the counter for this key/value pair by count. */
 	bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count);
