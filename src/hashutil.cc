@@ -18,7 +18,7 @@
  * =====================================================================================
  */
 
-#include "hashutil.h"
+#include "include/hashutil.h"
 
 
 namespace kmercounting {

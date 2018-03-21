@@ -27,8 +27,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "zipf.h"
-#include "gqf_wrapper.h"
+#include "include/zipf.h"
+#include "include/gqf_wrapper.h"
 
 #ifndef  USE_MYRANDOM
 #define RFUN random

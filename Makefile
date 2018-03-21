@@ -18,6 +18,10 @@ ifdef P
 	PROFILE=-pg -no-pie # for bug in gprof.
 endif
 
+LOC_INCLUDE=include
+LOC_SRC=src
+OBJDIR=obj
+
 CC = gcc -std=gnu11
 CXX = g++ -std=c++11
 LD= g++ -std=c++11
@@ -34,18 +38,18 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 
-main:                  main.o gqf.o	hashutil.o
-bm:                    bm.o gqf.o	zipf.o hashutil.o
+main:		$(OBJDIR)/main.o $(OBJDIR)/gqf.o $(OBJDIR)/hashutil.o
+bm:		$(OBJDIR)/bm.o $(OBJDIR)/gqf.o $(OBJDIR)/zipf.o $(OBJDIR)/hashutil.o
 
 # dependencies between .o files and .h files
 
-main.o: 								gqf.h
-bm.o:										gqf_wrapper.h
+$(OBJDIR)/main.o: 	$(LOC_INCLUDE)/gqf.h
+$(OBJDIR)/bm.o:			$(LOC_INCLUDE)/gqf_wrapper.h
 
 # dependencies between .o files and .cc (or .c) files
 
-%.o: %.cc
-%.o: %.c
+$(OBJDIR)/%.o: $(LOC_SRC)/%.cc
+$(OBJDIR)/%.o: $(LOC_SRC)/%.c
 
 #
 # generic build rules
@@ -54,12 +58,12 @@ bm.o:										gqf_wrapper.h
 $(TARGETS):
 	$(LD) $^ -o $@ $(LDFLAGS)
 
-%.o: %.cc
+$(OBJDIR)/%.o: $(LOC_SRC)/%.cc
 	$(CXX) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
-%.o: %.c
+$(OBJDIR)/%.o: $(LOC_SRC)/%.c
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
 clean:
-	rm -f *.o $(TARGETS) core
+	rm -f $(OBJDIR)/*.o $(TARGETS) core
 

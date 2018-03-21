@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "gqf.h"
+#include "include/gqf.h"
 
 /******************************************************************
  * Code for managing the metadata bits and slots w/o interpreting *
