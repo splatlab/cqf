@@ -1,3 +1,22 @@
+/*
+ * ============================================================================
+ *
+ *       Filename:  gqf.c
+ *
+ *    Description:  
+ *
+ *        Version:  1.0
+ *        Created:  2017-02-04 03:40:58 PM
+ *       Revision:  none
+ *       Compiler:  gcc
+ *
+ *         Author:  Prashant Pandey (ppandey@cs.stonybrook.edu)
+ *                  Rob Johnson (rob@cs.stonybrook.edu)
+ *   Organization:  Stony Brook University
+ *
+ * ============================================================================
+ */
+
 #include <stdlib.h>
 #if 0
 # include <assert.h>
@@ -14,6 +33,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "include/hashutil.h"
 #include "include/gqf.h"
 
 /******************************************************************
@@ -2055,6 +2075,13 @@ bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 		return false;
 	if (count == 0)
 		return true;
+
+	if (qf->metadata->hash_mode == DEFAULT)
+		key = MurmurHash64A(((void *)&key), sizeof(key),
+																	qf->metadata->seed);
+	else if (qf->metadata->hash_mode == INVERTIBLE)
+		key = hash_64(key, BITMASK(qf->metadata->key_bits));
+
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
 	if (count == 1)
@@ -2084,6 +2111,12 @@ bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 	if (count == 0)
 		return true;
 
+	if (qf->metadata->hash_mode == DEFAULT)
+		key = MurmurHash64A(((void *)&key), sizeof(key),
+																	qf->metadata->seed);
+	else if (qf->metadata->hash_mode == INVERTIBLE)
+		key = hash_64(key, BITMASK(qf->metadata->key_bits));
+
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
 	return _remove(qf, hash, count);
@@ -2095,6 +2128,12 @@ bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value)
 	if (count == 0)
 		return true;
 
+	if (qf->metadata->hash_mode == DEFAULT)
+		key = MurmurHash64A(((void *)&key), sizeof(key),
+																	qf->metadata->seed);
+	else if (qf->metadata->hash_mode == INVERTIBLE)
+		key = hash_64(key, BITMASK(qf->metadata->key_bits));
+
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
 	return _remove(qf, hash, count);
@@ -2102,6 +2141,12 @@ bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value)
 
 uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value)
 {
+	if (qf->metadata->hash_mode == DEFAULT)
+		key = MurmurHash64A(((void *)&key), sizeof(key),
+																	qf->metadata->seed);
+	else if (qf->metadata->hash_mode == INVERTIBLE)
+		key = hash_64(key, BITMASK(qf->metadata->key_bits));
+
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
 	uint64_t hash_remainder   = hash & BITMASK(qf->metadata->bits_per_slot);
@@ -2132,6 +2177,12 @@ uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value)
 
 uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value)
 {
+	if (qf->metadata->hash_mode == DEFAULT)
+		key = MurmurHash64A(((void *)&key), sizeof(key),
+																	qf->metadata->seed);
+	else if (qf->metadata->hash_mode == INVERTIBLE)
+		key = hash_64(key, BITMASK(qf->metadata->key_bits));
+
 	uint64_t hash = key;
 	uint64_t hash_remainder   = hash & BITMASK(qf->metadata->key_remainder_bits);
 	int64_t hash_bucket_index = hash >> qf->metadata->key_remainder_bits;
@@ -2215,6 +2266,12 @@ bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash)
 	qfi->qf = qf;
 	qfi->num_clusters = 0;
 
+	if (qf->metadata->hash_mode == DEFAULT)
+		hash = MurmurHash64A(((void *)&hash), sizeof(hash),
+																	qf->metadata->seed);
+	else if (qf->metadata->hash_mode == INVERTIBLE)
+		hash = hash_64(hash, BITMASK(qf->metadata->key_bits));
+
 	uint64_t hash_remainder   = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index = hash >> qf->metadata->bits_per_slot;
 	bool flag = false;
@@ -2281,8 +2338,9 @@ int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 	*key = (qfi->run << qfi->qf->metadata->key_remainder_bits) | current_remainder;
 	*count = current_count; 
 
-	/*qfi->current = end_index;*/ 		//get should not change the current index
-																		//of the iterator
+	if (qfi->qf->metadata->hash_mode == INVERTIBLE)
+		*key = hash_64i(*key, BITMASK(qfi->qf->metadata->key_bits));
+
 	return 0;
 }
 

@@ -24,7 +24,7 @@ OBJDIR=obj
 
 CC = gcc -std=gnu11
 CXX = g++ -std=c++11
-LD= g++ -std=c++11
+LD= gcc -std=gnu11
 
 CXXFLAGS = -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Wno-unused-result -Wno-unused-function -Wno-strict-aliasing
 
@@ -43,7 +43,7 @@ bm:		$(OBJDIR)/bm.o $(OBJDIR)/gqf.o $(OBJDIR)/zipf.o $(OBJDIR)/hashutil.o
 
 # dependencies between .o files and .h files
 
-$(OBJDIR)/main.o: 	$(LOC_INCLUDE)/gqf.h
+$(OBJDIR)/main.o: 	$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/hashutil.h
 $(OBJDIR)/bm.o:			$(LOC_INCLUDE)/gqf_wrapper.h
 
 # dependencies between .o files and .cc (or .c) files
