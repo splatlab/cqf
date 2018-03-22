@@ -37,7 +37,8 @@ int main(int argc, char **argv)
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t nhashbits = qbits + 8;
 	uint64_t nslots = (1ULL << qbits);
-	uint64_t nvals = 250*nslots/1000;
+	uint64_t nvals = 750*nslots/1000;
+	uint64_t key_count = 1000;
 	uint64_t *vals;
 
 	/* Initialise the CQF */
@@ -46,6 +47,7 @@ int main(int argc, char **argv)
 		abort();
 	}
 
+	qf_set_auto_resize(&qf);
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
@@ -56,14 +58,14 @@ int main(int argc, char **argv)
 
 	/* Insert vals in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
-		if (!qf_insert(&qf, vals[i], 0, 50)) {
+		if (!qf_insert(&qf, vals[i], 0, key_count)) {
 			fprintf(stderr, "failed insertion for key: %lx %d.\n", vals[i], 50);
 			abort();
 		}
 	}
 	for (uint64_t i = 0; i < nvals; i++) {
 		uint64_t count = qf_count_key_value(&qf, vals[i], 0);
-		if (count < 50) {
+		if (count < key_count) {
 			fprintf(stderr, "failed lookup after insertion for %lx %ld.\n", vals[i],
 							count);
 			abort();
@@ -76,12 +78,13 @@ int main(int argc, char **argv)
 	do {
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
-		if (qf_count_key_value(&qf, key, 0) < 50) {
+		qfi_next(&qfi);
+		if (qf_count_key_value(&qf, key, 0) < key_count) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
 							key, count);
 			abort();
 		}
-	} while(!qfi_next(&qfi));
+	} while(!qfi_end(&qfi));
 
 	fprintf(stdout, "Validated the CQF.\n");
 }

@@ -1638,6 +1638,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
 	qf->runtimedata->f_info.filepath = NULL;
 
+	qf->metadata->auto_resize = 0;
 	qf->metadata->hash_mode = hash;
 	qf->metadata->total_size_in_bytes = size;
 	qf->metadata->seed = seed;
@@ -1773,22 +1774,25 @@ void qf_reset(QF *qf)
 bool qf_resize_malloc(QF *qf, uint64_t nslots)
 {
 	QF new_qf;
-	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits, qf->metadata->value_bits,
-						qf->runtimedata->lock_mode, qf->metadata->hash_mode,
-						qf->metadata->seed))
+	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits,
+								 qf->metadata->value_bits, qf->runtimedata->lock_mode,
+								 qf->metadata->hash_mode, qf->metadata->seed))
 		return false;
+	if (qf->metadata->auto_resize)
+		qf_set_auto_resize(&new_qf);
+
 	// copy keys from qf into new_qf
-	/* Initialize an iterator */
 	QFi qfi;
 	qf_iterator(qf, &qfi, 0);
 	do {
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
-		if (qf_insert(&new_qf, key, value, count)) {
-			fprintf(stderr, "Failed to insert key: %ld into the new CQF", key);
+		qfi_next(&qfi);
+		if (!qf_insert(&new_qf, key, value, count)) {
+			fprintf(stderr, "Failed to insert key: %ld into the new CQF.\n", key);
 			abort();
 		}
-	} while(!qfi_next(&qfi));
+	} while(!qfi_end(&qfi));
 
 	qf_free(qf);
 	memcpy(qf, &new_qf, sizeof(QF));
@@ -1801,7 +1805,7 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 	QF new_qf;
 	new_qf.runtimedata = (qfruntime *)calloc(sizeof(qfruntime), 1);
 	if (new_qf.runtimedata == NULL) {
-		perror("Couldn't allocate memory for runtime data.");
+		perror("Couldn't allocate memory for runtime data.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -1813,18 +1817,22 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 
 	if (init_size > buffer_len)
 		return init_size;
+
+	if (qf->metadata->auto_resize)
+		qf_set_auto_resize(&new_qf);
+
 	// copy keys from qf into new_qf
-	/* Initialize an iterator */
 	QFi qfi;
 	qf_iterator(qf, &qfi, 0);
 	do {
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
-		if (qf_insert(&new_qf, key, value, count)) {
-			fprintf(stderr, "Failed to insert key: %ld into the new CQF", key);
+		qfi_next(&qfi);
+		if (!qf_insert(&new_qf, key, value, count)) {
+			fprintf(stderr, "Failed to insert key: %ld into the new CQF.\n", key);
 			abort();
 		}
-	} while(!qfi_next(&qfi));
+	} while(!qfi_end(&qfi));
 
 	qf_free(qf);
 	memcpy(qf, &new_qf, sizeof(QF));
@@ -1832,12 +1840,23 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 	return init_size;
 }
 
+void qf_set_auto_resize(QF* qf)
+{
+	qf->metadata->auto_resize = 1;
+}
+
 bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 {
 	// We fill up the CQF up to 95% load factor.
 	// This is a very conservative check.
-	if (qf->metadata->noccupied_slots >= qf->metadata->xnslots * 0.95)
-		return false;
+	if (qf->metadata->noccupied_slots >= qf->metadata->xnslots * 0.95) {
+		if (qf->metadata->auto_resize) {
+			fprintf(stdout, "Resizing the CQF.\n");
+			qf_resize_malloc(qf, qf->metadata->nslots * 2);
+		}
+		else
+			return false;
+	}
 	if (count == 0)
 		return true;
 

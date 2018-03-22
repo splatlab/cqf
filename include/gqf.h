@@ -193,6 +193,8 @@ extern "C" {
 	uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t
 										 buffer_len);
 
+	void qf_set_auto_resize(QF* qf);
+
 	/* Increment the counter for this key/value pair by count. */
 	bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count);
 
