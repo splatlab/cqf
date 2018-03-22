@@ -51,7 +51,10 @@ int main(int argc, char **argv)
 
 	/* Insert vals in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
-		qf_insert(qf, vals[i], 0, 50);
+		if (!qf_insert(qf, vals[i], 0, 50)) {
+			fprintf(stderr, "failed insertion for key: %lx %d.\n", vals[i], 50);
+			abort();
+		}
 	}
 	for (uint64_t i = 0; i < nvals; i++) {
 		uint64_t count = qf_count_key_value(qf, vals[i], 0);
@@ -69,7 +72,7 @@ int main(int argc, char **argv)
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
 		if (qf_count_key_value(qf, key, 0) < 50) {
-			fprintf(stderr, "Failed lookup during ieration for: %ld. Returned count: %ld\n",
+			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
 							key, count);
 			abort();
 		}
