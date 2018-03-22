@@ -100,10 +100,12 @@ uint64_t qf_usefile(QF* qf, enum lockingmode lock, char* filename)
 	}
 
 	if (!S_ISREG (sb.st_mode)) {
-		fprintf (stderr, "%s is not a file.", filename);
+		fprintf (stderr, "%s is not a file.\n", filename);
 		exit(EXIT_FAILURE);
 	}
 
+	qf->runtimedata->f_info.filepath = malloc(strlen(filename));
+	strcpy(qf->runtimedata->f_info.filepath, filename);
 	qf->runtimedata->lock_mode = lock;
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;

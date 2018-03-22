@@ -72,6 +72,29 @@ int main(int argc, char **argv)
 		}
 	}
 
+	char filename[] = "mycqf.cqf";
+	fprintf(stdout, "Serializing the CQF to disk.\n");
+	uint64_t total_size = qf_serialize(&qf, filename);
+	if (total_size < sizeof(qfmetadata) + qf.metadata->total_size_in_bytes) {
+		fprintf(stderr, "CQF serialization failed.\n");
+		abort();
+	}
+
+	QF file_qf;
+	fprintf(stdout, "Reading the CQF from disk.\n");
+	if (!qf_usefile(&file_qf, LOCKS_FORBIDDEN, filename)) {
+		fprintf(stderr, "Can't initialize the CQF from file: %s.\n", filename);
+		abort();
+	}
+	for (uint64_t i = 0; i < nvals; i++) {
+		uint64_t count = qf_count_key_value(&file_qf, vals[i], 0);
+		if (count < key_count) {
+			fprintf(stderr, "failed lookup in file based CQF for %lx %ld.\n",
+							vals[i], count);
+			abort();
+		}
+	}
+
 	QFi qfi;
 	/* Initialize an iterator */
 	qf_iterator(&qf, &qfi, 0);
