@@ -167,15 +167,21 @@ extern "C" {
 #define DEBUG_DUMP(qf) \
 	do { if (PRINT_DEBUG) qf_dump_metadata(qf); } while (0)
 
+	/* Initialize the CQF at "buffer".
+	 * If there is not enough space at buffer then it will return the total size
+	 * needed in bytes to initialize the CQF.
+	 * */
 	uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 									 value_bits, enum lockingmode lock, enum hashmode hash,
 									 uint32_t seed, void* buffer, uint64_t buffer_len);
 
+	/* Read the CQF stored at "buffer". */
 	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
 									lock);
 
 	void *qf_destroy(QF *qf);
 
+	/* Initialize the CQF and allocate memory for the CQF. */
 	bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 								 value_bits, enum lockingmode lock, enum hashmode hash,
 								 uint32_t seed);
@@ -188,8 +194,14 @@ extern "C" {
 	 * as the src QF before calling this function. */
 	void qf_copy(QF *dest, const QF *src);
 
+	/* Allocate a new CQF using "nslots" and copy elements from "qf" into it. */
 	bool qf_resize_malloc(QF *qf, uint64_t nslots);
 
+	/* Allocate a new CQF using "nslots" at "buffer" and copy elements from "qf"
+	 * into it. 
+	 * If there is not enough space at buffer then it will return the total size
+	 * needed in bytes to initialize the new CQF.
+	 * */
 	uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t
 										 buffer_len);
 

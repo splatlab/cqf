@@ -38,10 +38,12 @@ extern "C" {
 		char *filepath;
 	} file_info;
 
+	/* Initialize a file-backed CQF at "filename". */
 	bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 									value_bits, enum lockingmode lock, enum hashmode hash,
 									uint32_t seed, char* filename);
 
+	/* Read "filename" into "qf". */
 	uint64_t qf_usefile(QF* qf, enum lockingmode lock, char* filename);
 
 	bool qf_closefile(QF* qf);
