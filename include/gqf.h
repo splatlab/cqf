@@ -1,9 +1,29 @@
-#ifndef QF_H
-#define QF_H
+/*
+ * =====================================================================================
+ *
+ *       Filename:  gqf.h
+ *
+ *    Description:  
+ *
+ *        Version:  1.0
+ *        Created:  2018-03-21 10:43:39 PM
+ *       Revision:  none
+ *       Compiler:  gcc
+ *
+ *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
+ *   Organization:  Stony Brook University
+ *
+ * =====================================================================================
+ */
+
+#ifndef _GQF_H_
+#define _GQF_H_
 
 #include <inttypes.h>
 #include <pthread.h>
 #include <stdbool.h>
+
+#include "include/gqf_file.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,6 +38,43 @@ extern "C" {
 
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) \
 												- 1ULL)
+
+	/* Must be >= 6.  6 seems fastest. */
+#define BLOCK_OFFSET_BITS (6)
+
+#define SLOTS_PER_BLOCK (1ULL << BLOCK_OFFSET_BITS)
+#define METADATA_WORDS_PER_BLOCK ((SLOTS_PER_BLOCK + 63) / 64)
+
+#define NUM_SLOTS_TO_LOCK (1ULL<<16)
+#define CLUSTER_SIZE (1ULL<<14)
+
+#define METADATA_WORD(qf,field,slot_index) (get_block((qf), (slot_index) / \
+																											SLOTS_PER_BLOCK)->field[((slot_index)  % SLOTS_PER_BLOCK) / 64])
+
+#define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
+#define BILLION 1000000000L
+
+	typedef struct __attribute__ ((__packed__)) qfblock {
+		/* Code works with uint16_t, uint32_t, etc, but uint8_t seems just as fast as
+		 * anything else */
+		uint8_t offset; 
+		uint64_t occupieds[METADATA_WORDS_PER_BLOCK];
+		uint64_t runends[METADATA_WORDS_PER_BLOCK];
+
+#if BITS_PER_SLOT == 8
+		uint8_t  slots[SLOTS_PER_BLOCK];
+#elif BITS_PER_SLOT == 16
+		uint16_t  slots[SLOTS_PER_BLOCK];
+#elif BITS_PER_SLOT == 32
+		uint32_t  slots[SLOTS_PER_BLOCK];
+#elif BITS_PER_SLOT == 64
+		uint64_t  slots[SLOTS_PER_BLOCK];
+#elif BITS_PER_SLOT != 0
+		uint8_t   slots[SLOTS_PER_BLOCK * BITS_PER_SLOT / 8];
+#else
+		uint8_t   slots[];
+#endif
+	} qfblock;
 
 	struct __attribute__ ((__packed__)) qfblock;
 	typedef struct qfblock qfblock;
@@ -43,21 +100,21 @@ extern "C" {
 		uint64_t locks_acquired_single_attempt;
 	} wait_time_data;
 
-	typedef struct quotient_filter_mem {
-		int fd;
+	typedef struct quotient_filter_runtime_data {
+		file_info f_info;
+		uint64_t num_locks;
 		enum lockingmode lock_mode;
 		volatile int metadata_lock;
 		volatile int *locks;
 		wait_time_data *wait_times;
-	} quotient_filter_mem;
+	} quotient_filter_runtime_data;
 
-	typedef quotient_filter_mem qfmem;
+	typedef quotient_filter_runtime_data qfruntime;
 
 	typedef struct quotient_filter_metadata {
-		char filepath[50];
 		enum hashmode hash_mode;
 		uint32_t auto_resize;
-		uint64_t size;
+		uint64_t total_size_in_bytes;
 		uint32_t seed;
 		uint64_t nslots;
 		uint64_t xnslots;
@@ -70,13 +127,12 @@ extern "C" {
 		uint64_t nelts;
 		uint64_t ndistinct_elts;
 		uint64_t noccupied_slots;
-		uint64_t num_locks;
 	} quotient_filter_metadata;
 
 	typedef quotient_filter_metadata qfmetadata;
 
 	typedef struct quotient_filter {
-		qfmem *mem;
+		qfruntime *runtimedata;
 		qfmetadata *metadata;
 		qfblock *blocks;
 	} quotient_filter;
@@ -120,28 +176,13 @@ extern "C" {
 
 	void *qf_destroy(QF *qf);
 
-	QF *qf_initfile(uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
-									enum lockingmode lock, enum hashmode hash, uint32_t seed,
-									char* filename);
-
-	uint64_t qf_usefile(QF* qf, enum lockingmode lock, char* filename);
-
-	bool qf_closefile(QF* qf);
-
-	bool qf_deletefile(QF* qf);
-
-	QF *qf_malloc(uint64_t nslots, uint64_t key_bits, uint64_t value_bits, enum
-								lockingmode lock, enum hashmode hash, uint32_t seed);
+	bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
+								 value_bits, enum lockingmode lock, enum hashmode hash,
+								 uint32_t seed);
 
 	bool qf_free(QF *qf);
 
 	void qf_reset(QF *qf);
-
-	/* write data structure of to the disk */
-	uint64_t qf_serialize(const QF *qf, const char *filename);
-
-	/* read data structure off the disk */
-	uint64_t qf_deserialize(QF *qf, const char *filename);
 
 	/* The caller should call qf_init on the dest QF using the same parameters
 	 * as the src QF before calling this function. */
@@ -228,4 +269,4 @@ extern "C" {
 }
 #endif
 
-#endif /* QF_H */
+#endif /* _GQF_H_ */

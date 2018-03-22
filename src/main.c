@@ -33,6 +33,7 @@
 
 int main(int argc, char **argv)
 {
+	QF qf;
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t nhashbits = qbits + 8;
 	uint64_t nslots = (1ULL << qbits);
@@ -40,24 +41,28 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	QF *qf = qf_malloc(nslots, nhashbits, 0, LOCKS_FORBIDDEN, INVERTIBLE, 0);
+	if (!qf_malloc(&qf, nslots, nhashbits, 0, LOCKS_FORBIDDEN, INVERTIBLE, 0)) {
+		fprintf(stderr, "Can't allocate CQF.\n");
+		abort();
+	}
+
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
 	RAND_pseudo_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
 	for (uint64_t i = 0; i < nvals; i++) {
-		vals[i] = (1 * vals[i]) % qf->metadata->range;
+		vals[i] = (1 * vals[i]) % qf.metadata->range;
 	}
 
 	/* Insert vals in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
-		if (!qf_insert(qf, vals[i], 0, 50)) {
+		if (!qf_insert(&qf, vals[i], 0, 50)) {
 			fprintf(stderr, "failed insertion for key: %lx %d.\n", vals[i], 50);
 			abort();
 		}
 	}
 	for (uint64_t i = 0; i < nvals; i++) {
-		uint64_t count = qf_count_key_value(qf, vals[i], 0);
+		uint64_t count = qf_count_key_value(&qf, vals[i], 0);
 		if (count < 50) {
 			fprintf(stderr, "failed lookup after insertion for %lx %ld.\n", vals[i],
 							count);
@@ -67,11 +72,11 @@ int main(int argc, char **argv)
 
 	QFi qfi;
 	/* Initialize an iterator */
-	qf_iterator(qf, &qfi, 0);
+	qf_iterator(&qf, &qfi, 0);
 	do {
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
-		if (qf_count_key_value(qf, key, 0) < 50) {
+		if (qf_count_key_value(&qf, key, 0) < 50) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
 							key, count);
 			abort();

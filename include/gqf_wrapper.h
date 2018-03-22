@@ -20,43 +20,44 @@
 #define GQF_WRAPPER_H
 
 #include "gqf.h"
+#include "gqf_file.h"
 
-QF* g_quotient_filter;
+QF g_quotient_filter;
 QFi g_quotient_filter_itr;
 
 extern inline int gqf_init(uint64_t nbits, uint64_t num_hash_bits)
 {
 	uint64_t nslots = 1 << nbits;
-	g_quotient_filter = qf_malloc(nslots, num_hash_bits, 0, LOCKS_FORBIDDEN,
-																NONE, 0);
+	qf_malloc(&g_quotient_filter, nslots, num_hash_bits, 0, LOCKS_FORBIDDEN,
+						NONE, 0);
 	return 0;
 }
 
 extern inline int gqf_insert(__uint128_t val, uint64_t count)
 {
-	qf_insert(g_quotient_filter, val, 0, count);
+	qf_insert(&g_quotient_filter, val, 0, count);
 	return 0;
 }
 
 extern inline int gqf_lookup(__uint128_t val)
 {
-	return qf_count_key_value(g_quotient_filter, val, 0);
+	return qf_count_key_value(&g_quotient_filter, val, 0);
 }
 
 extern inline __uint128_t gqf_range()
 {
-	return g_quotient_filter->metadata->range;
+	return g_quotient_filter.metadata->range;
 }
 
 extern inline int gqf_destroy()
 {
-	qf_free(g_quotient_filter);
+	qf_free(&g_quotient_filter);
 	return 0;
 }
 
 extern inline int gqf_iterator(uint64_t pos)
 {
-	qf_iterator(g_quotient_filter, &g_quotient_filter_itr, pos);
+	qf_iterator(&g_quotient_filter, &g_quotient_filter_itr, pos);
 	return 0;
 }
 
