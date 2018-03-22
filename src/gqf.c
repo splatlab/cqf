@@ -2078,7 +2078,7 @@ bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 
 	if (qf->metadata->hash_mode == DEFAULT)
 		key = MurmurHash64A(((void *)&key), sizeof(key),
-																	qf->metadata->seed);
+																	qf->metadata->seed) % qf->metadata->range;
 	else if (qf->metadata->hash_mode == INVERTIBLE)
 		key = hash_64(key, BITMASK(qf->metadata->key_bits));
 
@@ -2113,7 +2113,7 @@ bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 
 	if (qf->metadata->hash_mode == DEFAULT)
 		key = MurmurHash64A(((void *)&key), sizeof(key),
-																	qf->metadata->seed);
+																	qf->metadata->seed) % qf->metadata->range;
 	else if (qf->metadata->hash_mode == INVERTIBLE)
 		key = hash_64(key, BITMASK(qf->metadata->key_bits));
 
@@ -2130,7 +2130,7 @@ bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value)
 
 	if (qf->metadata->hash_mode == DEFAULT)
 		key = MurmurHash64A(((void *)&key), sizeof(key),
-																	qf->metadata->seed);
+																	qf->metadata->seed) % qf->metadata->range;
 	else if (qf->metadata->hash_mode == INVERTIBLE)
 		key = hash_64(key, BITMASK(qf->metadata->key_bits));
 
@@ -2143,7 +2143,7 @@ uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value)
 {
 	if (qf->metadata->hash_mode == DEFAULT)
 		key = MurmurHash64A(((void *)&key), sizeof(key),
-																	qf->metadata->seed);
+																	qf->metadata->seed) % qf->metadata->range;
 	else if (qf->metadata->hash_mode == INVERTIBLE)
 		key = hash_64(key, BITMASK(qf->metadata->key_bits));
 
@@ -2179,7 +2179,7 @@ uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value)
 {
 	if (qf->metadata->hash_mode == DEFAULT)
 		key = MurmurHash64A(((void *)&key), sizeof(key),
-																	qf->metadata->seed);
+																	qf->metadata->seed) % qf->metadata->range;
 	else if (qf->metadata->hash_mode == INVERTIBLE)
 		key = hash_64(key, BITMASK(qf->metadata->key_bits));
 
@@ -2268,7 +2268,7 @@ bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash)
 
 	if (qf->metadata->hash_mode == DEFAULT)
 		hash = MurmurHash64A(((void *)&hash), sizeof(hash),
-																	qf->metadata->seed);
+																	qf->metadata->seed) % qf->metadata->range;
 	else if (qf->metadata->hash_mode == INVERTIBLE)
 		hash = hash_64(hash, BITMASK(qf->metadata->key_bits));
 

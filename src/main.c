@@ -1,7 +1,7 @@
 /*
  * ============================================================================
  *
- *       Filename:  main_release.c
+ *       Filename:  main.c
  *
  *    Description:  
  *
@@ -29,6 +29,7 @@
 #include <openssl/rand.h>
 
 #include "include/gqf.h"
+#include "include/hashutil.h"
 
 int main(int argc, char **argv)
 {
@@ -39,7 +40,7 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	QF *qf = qf_malloc(nslots, nhashbits, 0, LOCKS_FORBIDDEN, NONE, 0);
+	QF *qf = qf_malloc(nslots, nhashbits, 0, LOCKS_FORBIDDEN, INVERTIBLE, 0);
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
@@ -68,8 +69,8 @@ int main(int argc, char **argv)
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
 		if (qf_count_key_value(qf, key, 0) < 50) {
-			fprintf(stderr, "Failed lookup from A for: %ld. Returned count: %ld\n",
-							key, qf_count_key_value(qf, key, 0));
+			fprintf(stderr, "Failed lookup during ieration for: %ld. Returned count: %ld\n",
+							key, count);
 			abort();
 		}
 	} while(!qfi_next(&qfi));
