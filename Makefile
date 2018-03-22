@@ -1,4 +1,4 @@
-TARGETS=main
+TARGETS=main bm
 
 ifdef D
 	DEBUG=-g
@@ -18,11 +18,15 @@ ifdef P
 	PROFILE=-pg -no-pie # for bug in gprof.
 endif
 
-CXX = g++ -std=c++11
-CC = g++ -std=c++11
-LD= g++ -std=c++11
+LOC_INCLUDE=include
+LOC_SRC=src
+OBJDIR=obj
 
-CXXFLAGS = -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Wno-unused-result -Wno-strict-aliasing -Wno-unused-function
+CC = gcc -std=gnu11
+CXX = g++ -std=c++11
+LD= gcc -std=gnu11
+
+CXXFLAGS = -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Wno-unused-result -Wno-unused-function -Wno-strict-aliasing
 
 LDFLAGS = $(DEBUG) $(PROFILE) $(OPT) -lpthread -lssl -lcrypto -lm
 
@@ -34,30 +38,32 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 
-main:                  main.o 								 gqf.o
+main:		$(OBJDIR)/main.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o $(OBJDIR)/hashutil.o
+bm:		$(OBJDIR)/bm.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o $(OBJDIR)/zipf.o $(OBJDIR)/hashutil.o
 
 # dependencies between .o files and .h files
 
-main.o: 								 									gqf.h
+$(OBJDIR)/main.o: 	$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/gqf_file.h $(LOC_INCLUDE)/hashutil.h
+$(OBJDIR)/bm.o:			$(LOC_INCLUDE)/gqf_wrapper.h
 
 # dependencies between .o files and .cc (or .c) files
 
-%.o: %.cc
-gqf.o: gqf.c gqf.h
+$(OBJDIR)/%.o: $(LOC_SRC)/%.cc
+$(OBJDIR)/%.o: $(LOC_SRC)/%.c
 
 #
 # generic build rules
 #
 
 $(TARGETS):
-	$(LD) $^ $(LDFLAGS) -o $@
+	$(LD) $^ -o $@ $(LDFLAGS)
 
-%.o: %.cc
+$(OBJDIR)/%.o: $(LOC_SRC)/%.cc
 	$(CXX) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
-%.o: %.c
+$(OBJDIR)/%.o: $(LOC_SRC)/%.c
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
 clean:
-	rm -f *.o $(TARGETS)
+	rm -f $(OBJDIR)/*.o $(TARGETS) core
 
