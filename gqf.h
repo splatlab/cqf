@@ -208,11 +208,50 @@ public:
     iterator end() const {
         return iterator(this, 0);
     }
+#if 0
+    // The strange thing is that one has to pre-allocate the returned table.
+    // It isn't performed in-place in that function.
+    // I would be interested in seeing if there's a simple yet efficient way to do so
+    filter operator+=(const filter &other) {
+        QFi qfia, qfib;
+        qf_iterator(qfa, this, 0);
+        qf_iterator(qfb, &other, 0);
+    
+        uint64_t keya, valuea, counta, keyb, valueb, countb;
+        qfi_get(&qfia, &keya, &valuea, &counta);
+        qfi_get(&qfib, &keyb, &valueb, &countb);
+        do {
+            if (keya < keyb) {
+                qf_insert(qfc, keya, valuea, counta);
+                if (!qfi_next(&qfia))
+                    qfi_get(&qfia, &keya, &valuea, &counta);
+            }
+            else {
+                qf_insert(qfc, keyb, valueb, countb);
+                if (!qfi_next(&qfib))
+                    qfi_get(&qfib, &keyb, &valueb, &countb);
+            }
+        } while(!qfi_end(&qfia) && !qfi_end(&qfib));
+    
+        if (!qfi_end(&qfia)) {
+            do {
+                qfi_get(&qfia, &keya, &valuea, &counta);
+                qf_insert(qfc, keya, valuea, counta);
+            } while(!qfi_next(&qfia));
+        }
+        if (!qfi_end(&qfib)) {
+            do {
+                qfi_get(&qfib, &keyb, &valueb, &countb);
+                qf_insert(qfc, keyb, valueb, countb);
+            } while(!qfi_next(&qfib));
+        }
+    }
+#endif
     void insert(uint64_t key, uint64_t value, uint64_t count) {
-        qf_insert(&filt_, key % filt_.range, value, count);
+        qf_insert(&filt_, key & (filt_.range - 1), value, count); // filt_.range is guaranteed to be a power of two, so we can cut out a modulus.
     }
     void remove(uint64_t key, uint64_t value, uint64_t count) {
-        qf_remove(&filt_, key % filt_.range, value, count);
+        qf_remove(&filt_, key & (filt_.range - 1), value, count);
     }
     uint64_t count(uint64_t key) const {
         return qf_count_key(&filt_, key % filt_.range);
@@ -248,6 +287,8 @@ public:
     }
 }; // class filter
 } // namespace qf
+static_assert(MAX_VALUE == BITMASK, "Must be the same");
 #endif // #ifdef __cplusplus
+
 
 #endif /* QF_H */
