@@ -1627,7 +1627,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 #endif
 
 	total_num_bytes = sizeof(qfmetadata) + size;
-	if (total_num_bytes > buffer_len)
+	if (buffer == NULL || total_num_bytes > buffer_len)
 		return total_num_bytes;
 
 	memset(buffer, 0, total_num_bytes);
