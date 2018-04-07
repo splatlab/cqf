@@ -287,7 +287,6 @@ public:
     }
 }; // class filter
 } // namespace qf
-static_assert(MAX_VALUE == BITMASK, "Must be the same");
 #endif // #ifdef __cplusplus
 
 

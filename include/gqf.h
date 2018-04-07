@@ -280,6 +280,114 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+#include <array>
+#include <cstring>
+namespace qf {
+class filter {
+    QF filt_;
+    class iterator {
+        QFi it_;
+        using TupleType = std::array<uint64_t, 3>;
+    public:
+        iterator(const filter *filter, uint64_t pos) {
+            qf_iterator((const QF *)filter, &static_cast<QFi &>(*this), pos);
+        }
+        iterator &operator++() {qfi_next(&(QFi &)(*this)); return *this;}
+        iterator operator++(int) {
+            iterator ret(*this);
+            operator++();
+            return ret;
+        }
+        operator QFi &()       {return *(QFi *)this;}
+        operator const QFi &() const {return *(const QFi *)this;}
+        iterator(const iterator &it) {
+            std::memcpy(this, &it, sizeof(it));
+        }
+        int get(uint64_t *key, uint64_t *value, uint64_t *count) const {
+#ifdef __EXCEPTIONS
+            if(qfi_get(&static_cast<const QFi &>(*this), key, value, count)) throw std::runtime_error("Iterator is exhausted.");
+            return 0;
+#else
+            return qfi_get(&static_cast<QFi &>(*this), key, value, count);
+#endif
+        }
+        TupleType get() const {
+            std::array<uint64_t, 3> ret;
+            get(ret);
+            return ret;
+        }
+        TupleType operator*() const {return get();}
+        void get(TupleType &tup) const { // Modify tuple in-place.
+            get(&tup[0], &tup[1], &tup[2]);
+        }
+        template<typename T>
+        bool operator==([[maybe_unused]] const T &val) const {
+            return end();
+        }
+        template<typename T>
+        bool operator!=([[maybe_unused]] const T &val) const {
+            return !operator==(val);
+        }
+        int end() const {
+            return qfi_end(&static_cast<const QFi &>(*this));
+        }
+    };
+public:
+    operator QF &() {
+        return *(QF *)this;
+    }
+    operator const QF &() {
+        return *(const QF *)this;
+    }
+    filter(uint64_t nslots, uint64_t key_bits, uint64_t value_bits) {
+        qf_init(&filt_, nslots, key_bits, value_bits);
+    }
+    filter(const char *filename) {
+        qf_deserialize(&filt_, filename);
+    }
+    iterator begin() {
+        return iterator(this, 0);
+    }
+    iterator end() const {
+        return iterator(this, 0);
+    }
+    void insert(uint64_t key, uint64_t value, uint64_t count) {
+        qf_insert(&filt_, key % filt_.range, value, count);
+    }
+    void remove(uint64_t key, uint64_t value, uint64_t count) {
+        qf_remove(&filt_, key % filt_.range, value, count);
+    }
+    uint64_t count(uint64_t key) const {
+        return qf_count_key(&filt_, key % filt_.range);
+    }
+    uint64_t count(uint64_t key, uint64_t value) const {
+        return qf_count_key_value(&filt_, key, value);
+    }
+    void dump() const {
+        qf_dump(&filt_);
+    }
+    void query(uint64_t key, uint64_t *value) const {
+        qf_query(&filt_, key, value);
+    }
+    uint64_t query(uint64_t key) const {
+        uint64_t ret;
+        query(key, &ret);
+        return ret;
+    }
+    void replace(uint64_t key, uint64_t oldvalue, uint64_t newvalue) {
+        qf_replace(&filt_, key, oldvalue, newvalue);
+    }
+    void del(uint64_t key) {
+        qf_delete_key(&filt_, key);
+    }
+    void del(uint64_t key, uint64_t value) {
+        qf_delete_key_value(&filt_, key, value);
+    }
+    ~filter() {
+        qf_destroy(&filt_);
+    }
+};
+} // namespace qf
 #endif
 
 #endif /* _GQF_H_ */

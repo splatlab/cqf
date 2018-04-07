@@ -64,7 +64,7 @@ $(OBJDIR)/%.o: $(LOC_SRC)/%.cc
 $(OBJDIR)/%.o: $(LOC_SRC)/%.c
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
-%: %.cpp gqf.o
+%: src/%.cpp obj/gqf.o
 	$(CXX) $(CXXFLAGS) $(INCLUDE) gqf.o $< -o $@
 
 clean:

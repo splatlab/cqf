@@ -24,7 +24,6 @@
 #include <stdbool.h>
 
 #include "include/gqf.h"
-#include "include/posix_fallocate_mac.h"
 
 #ifdef __cplusplus
 extern "C" {
