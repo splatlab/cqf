@@ -165,7 +165,7 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }
 
-uint64_t qf_deserialize(QF *qf, const char *filename)
+uint64_t qf_deserialize(QF *qf, enum lockingmode lock, const char *filename)
 {
 	FILE *fin;
 	fin = fopen(filename, "rb");
@@ -181,7 +181,11 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 	}
 	qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
 	fread(qf->metadata, sizeof(qfmetadata), 1, fin);
+
+	qf->runtimedata->f_info.filepath = malloc(strlen(filename));
+	strcpy(qf->runtimedata->f_info.filepath, filename);
 	/* initlialize the locks in the QF */
+	qf->runtimedata->lock_mode = lock;
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
 	qf->runtimedata->metadata_lock = 0;
 	/* initialize all the locks to 0 */
