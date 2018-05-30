@@ -23,20 +23,11 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#include "include/gqf.h"
+#include "gqf.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-	typedef struct quotient_filter QF;
-	enum hashmode;
-	enum lockingmode;
-
-	typedef struct file_info {
-		int fd;
-		char *filepath;
-	} file_info;
 
 	/* Initialize a file-backed CQF at "filename". */
 	bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
@@ -44,7 +35,7 @@ extern "C" {
 									uint32_t seed, char* filename);
 
 	/* Read "filename" into "qf". */
-	uint64_t qf_usefile(QF* qf, enum lockingmode lock, char* filename);
+	uint64_t qf_usefile(QF* qf, enum lockingmode lock, const char* filename);
 
 	bool qf_closefile(QF* qf);
 
