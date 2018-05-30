@@ -20,7 +20,6 @@
 #define _GQF_H_
 
 #include <inttypes.h>
-#include <pthread.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -89,7 +88,7 @@ extern "C" {
 		LOCKS_REQUIRED
 	};
 
-	typedef struct file_info {
+  typedef struct file_info {
 		int fd;
 		char *filepath;
 	} file_info;
