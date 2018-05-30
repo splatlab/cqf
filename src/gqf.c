@@ -33,8 +33,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "include/hashutil.h"
-#include "include/gqf.h"
+#include "hashutil.h"
+#include "gqf.h"
 
 /******************************************************************
  * Code for managing the metadata bits and slots w/o interpreting *
@@ -1634,10 +1634,6 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->metadata = (qfmetadata *)(buffer);
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
-	qf->runtimedata->lock_mode = lock;
-	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
-	qf->runtimedata->f_info.filepath = NULL;
-
 	qf->metadata->auto_resize = 0;
 	qf->metadata->hash_mode = hash;
 	qf->metadata->total_size_in_bytes = size;
@@ -1656,6 +1652,10 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->metadata->nelts = 0;
 	qf->metadata->ndistinct_elts = 0;
 	qf->metadata->noccupied_slots = 0;
+
+	qf->runtimedata->lock_mode = lock;
+	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
+	qf->runtimedata->f_info.filepath = NULL;
 
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
@@ -2193,7 +2193,7 @@ int qfi_next(QFi *qfi)
 	}
 }
 
-inline int qfi_end(const QFi *qfi)
+int qfi_end(const QFi *qfi)
 {
 	if (qfi->current >= qfi->qf->metadata->xnslots /*&& is_runend(qfi->qf, qfi->current)*/)
 		return 1;
@@ -2212,7 +2212,7 @@ inline int qfi_end(const QFi *qfi)
  * insert(min, ic) 
  * increment either ia or ib, whichever is minimum.
  */
-void qf_merge(QF *qfa, QF *qfb, QF *qfc)
+void qf_merge(const QF *qfa, const QF *qfb, QF *qfc)
 {
 	QFi qfia, qfib;
 	qf_iterator(qfa, &qfia, 0);
@@ -2314,11 +2314,11 @@ void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr)
 }
 
 /* find cosine similarity between two QFs. */
-uint64_t qf_inner_product(QF *qfa, QF *qfb)
+uint64_t qf_inner_product(const QF *qfa, const QF *qfb)
 {
 	uint64_t acc = 0;
 	QFi qfi;
-	QF *qf_mem, *qf_disk;
+	const QF *qf_mem, *qf_disk;
 
 	// create the iterator on the larger QF.
 	if (qfa->metadata->total_size_in_bytes > qfb->metadata->total_size_in_bytes)
@@ -2344,10 +2344,10 @@ uint64_t qf_inner_product(QF *qfa, QF *qfb)
 }
 
 /* find cosine similarity between two QFs. */
-void qf_intersect(QF *qfa, QF *qfb, QF *qfr)
+void qf_intersect(const QF *qfa, const QF *qfb, QF *qfr)
 {
 	QFi qfi;
-	QF *qf_mem, *qf_disk;
+	const QF *qf_mem, *qf_disk;
 
 	// create the iterator on the larger QF.
 	if (qfa->metadata->total_size_in_bytes > qfb->metadata->total_size_in_bytes)
@@ -2369,7 +2369,7 @@ void qf_intersect(QF *qfa, QF *qfb, QF *qfr)
 }
 
 /* magnitude of a QF. */
-uint64_t qf_magnitude(QF *qf)
+uint64_t qf_magnitude(const QF *qf)
 {
 	return sqrt(qf_inner_product(qf, qf));
 }

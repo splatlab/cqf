@@ -23,8 +23,6 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#include "include/gqf_file.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -90,6 +88,11 @@ extern "C" {
 		LOCKS_OPTIONAL,
 		LOCKS_REQUIRED
 	};
+
+	typedef struct file_info {
+		int fd;
+		char *filepath;
+	} file_info;
 
 	// The below struct is used to instrument the code.
 	// It is not used in normal operations of the CQF.
@@ -268,16 +271,16 @@ extern "C" {
 	void qf_read(QF *qf, const char *path);
 
 	/* merge two QFs into the third one. */
-	void qf_merge(QF *qfa, QF *qfb, QF *qfc);
+	void qf_merge(const QF *qfa, const QF *qfb, QF *qfc);
 
 	/* merge multiple QFs into the final QF one. */
 	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr);
 
 	/* find cosine similarity between two QFs. */
-	uint64_t qf_inner_product(QF *qfa, QF *qfb);
+	uint64_t qf_inner_product(const QF *qfa, const QF *qfb);
 
 	/* magnitude of a QF. */
-	uint64_t qf_magnitude(QF *qf);
+	uint64_t qf_magnitude(const QF *qf);
 
 #ifdef __cplusplus
 }
