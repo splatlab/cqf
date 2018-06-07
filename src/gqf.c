@@ -41,6 +41,18 @@
  * the content of the slots.
  ******************************************************************/
 
+#define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
+#define BITMASK(nbits)                                            \
+  ((nbits) == 64 ? 0xffffffffffffffff : MAX_VALUE(nbits))
+#define NUM_SLOTS_TO_LOCK (1ULL<<16)
+#define CLUSTER_SIZE (1ULL<<14)
+#define METADATA_WORD(qf,field,slot_index)                              \
+  (get_block((qf), (slot_index) /                                       \
+             SLOTS_PER_BLOCK)->field[((slot_index)  % SLOTS_PER_BLOCK) / 64])
+
+
+#define BILLION 1000000000L
+
 #ifdef DEBUG
 #define PRINT_DEBUG 1
 #else
@@ -49,6 +61,9 @@
 
 #define DEBUG_CQF(fmt, ...) \
 	do { if (PRINT_DEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
+
+#define DEBUG_DUMP(qf) \
+	do { if (PRINT_DEBUG) qf_dump_metadata(qf); } while (0)
 
 static __inline__ unsigned long long rdtsc(void)
 {
