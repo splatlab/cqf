@@ -35,6 +35,7 @@
 #include "gqf.h"
 #include "gqf_file.h"
 
+#define NUM_SLOTS_TO_LOCK (1ULL<<16)
 
 bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 								 value_bits, enum lockingmode lock, enum hashmode hash,

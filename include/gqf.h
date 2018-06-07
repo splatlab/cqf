@@ -26,36 +26,36 @@
 extern "C" {
 #endif
 
-	/* Can be 
-		 0 (choose size at run-time), 
-		 8, 16, 32, or 64 (for optimized versions),
-		 or other integer <= 56 (for compile-time-optimized bit-shifting-based versions)
-		 */
-#define BITS_PER_SLOT 0
+/* Can be 
+   0 (choose size at run-time), 
+   8, 16, 32, or 64 (for optimized versions),
+   or other integer <= 56 (for compile-time-optimized bit-shifting-based versions)
+*/
+#define QF_BITS_PER_SLOT 0
 
-	/* Must be >= 6.  6 seems fastest. */
-#define BLOCK_OFFSET_BITS (6)
+/* Must be >= 6.  6 seems fastest. */
+#define QF_BLOCK_OFFSET_BITS (6)
 
-#define SLOTS_PER_BLOCK (1ULL << BLOCK_OFFSET_BITS)
-#define METADATA_WORDS_PER_BLOCK ((SLOTS_PER_BLOCK + 63) / 64)
+#define QF_SLOTS_PER_BLOCK (1ULL << QF_BLOCK_OFFSET_BITS)
+#define QF_METADATA_WORDS_PER_BLOCK ((QF_SLOTS_PER_BLOCK + 63) / 64)
 
 	typedef struct __attribute__ ((__packed__)) qfblock {
 		/* Code works with uint16_t, uint32_t, etc, but uint8_t seems just as fast as
 		 * anything else */
 		uint8_t offset; 
-		uint64_t occupieds[METADATA_WORDS_PER_BLOCK];
-		uint64_t runends[METADATA_WORDS_PER_BLOCK];
+		uint64_t occupieds[QF_METADATA_WORDS_PER_BLOCK];
+		uint64_t runends[QF_METADATA_WORDS_PER_BLOCK];
 
-#if BITS_PER_SLOT == 8
-		uint8_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT == 16
-		uint16_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT == 32
-		uint32_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT == 64
-		uint64_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT != 0
-		uint8_t   slots[SLOTS_PER_BLOCK * BITS_PER_SLOT / 8];
+#if QF_BITS_PER_SLOT == 8
+		uint8_t  slots[QF_SLOTS_PER_BLOCK];
+#elif QF_BITS_PER_SLOT == 16
+		uint16_t  slots[QF_SLOTS_PER_BLOCK];
+#elif QF_BITS_PER_SLOT == 32
+		uint32_t  slots[QF_SLOTS_PER_BLOCK];
+#elif QF_BITS_PER_SLOT == 64
+		uint64_t  slots[QF_SLOTS_PER_BLOCK];
+#elif QF_BITS_PER_SLOT != 0
+		uint8_t   slots[QF_SLOTS_PER_BLOCK * QF_BITS_PER_SLOT / 8];
 #else
 		uint8_t   slots[];
 #endif
