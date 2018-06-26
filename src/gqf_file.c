@@ -40,7 +40,7 @@
 #define NUM_SLOTS_TO_LOCK (1ULL<<16)
 
 bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-								 value_bits, enum lockingmode lock, enum hashmode hash,
+								 value_bits, enum qf_lockingmode lock, enum qf_hashmode hash,
 								 uint32_t seed, char* filename)
 {
 	uint64_t total_num_bytes = qf_init(qf, nslots, key_bits, value_bits,
@@ -83,7 +83,7 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 		return false;
 }
 
-uint64_t qf_usefile(QF* qf, enum lockingmode lock, const char* filename)
+uint64_t qf_usefile(QF* qf, enum qf_lockingmode lock, const char* filename)
 {
 	struct stat sb;
 	int ret;
@@ -167,7 +167,7 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }
 
-uint64_t qf_deserialize(QF *qf, enum lockingmode lock, const char *filename)
+uint64_t qf_deserialize(QF *qf, enum qf_lockingmode lock, const char *filename)
 {
 	FILE *fin;
 	fin = fopen(filename, "rb");

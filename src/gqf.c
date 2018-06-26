@@ -131,7 +131,7 @@ static inline bool qf_spin_lock(QF *qf, volatile int *lock, uint64_t idx)
  * Try to acquire a lock once and return even if the lock is busy.
  * If spin flag is set, then spin until the lock is available.
  */
-static inline bool qf_spin_lock(volatile int *lock, enum lockingmode flag)
+static inline bool qf_spin_lock(volatile int *lock, enum qf_lockingmode flag)
 {
 	if (flag != LOCKS_REQUIRED) {
 		return !__sync_lock_test_and_set(lock, 1);
@@ -1446,7 +1446,7 @@ static inline bool insert1(QF *qf, __uint128_t hash)
 }
 
 static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum
-													lockingmode flag)
+													qf_lockingmode flag)
 {
 	uint64_t hash_remainder           = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index        = hash >> qf->metadata->bits_per_slot;
@@ -1614,7 +1614,7 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count)
  ***********************************************************************/
 
 uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
-								 enum lockingmode lock, enum hashmode hash, uint32_t seed,
+								 enum qf_lockingmode lock, enum qf_hashmode hash, uint32_t seed,
 								 void* buffer, uint64_t buffer_len)
 {
 	uint64_t num_slots, xnslots, nblocks;
@@ -1686,7 +1686,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	return total_num_bytes;
 }
 
-uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
+uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum qf_lockingmode
 								lock)
 {
 	qf->metadata = (qfmetadata *)(buffer);
@@ -1719,7 +1719,7 @@ void *qf_destroy(QF *qf)
 }
 
 bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-							 value_bits, enum lockingmode lock, enum hashmode hash, uint32_t
+							 value_bits, enum qf_lockingmode lock, enum qf_hashmode hash, uint32_t
 							 seed)
 {
 	uint64_t total_num_bytes = qf_init(qf, nslots, key_bits, value_bits,
