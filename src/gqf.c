@@ -35,6 +35,7 @@
 
 #include "hashutil.h"
 #include "gqf.h"
+#include "gqf_int.h"
 
 /******************************************************************
  * Code for managing the metadata bits and slots w/o interpreting *
