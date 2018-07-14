@@ -29,6 +29,7 @@
 #include <openssl/rand.h>
 
 #include "include/gqf.h"
+#include "include/gqf_file.h"
 #include "include/hashutil.h"
 
 int main(int argc, char **argv)
