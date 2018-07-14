@@ -179,7 +179,11 @@ uint64_t qf_deserialize(QF *qf, enum lockingmode lock, const char *filename)
 		exit(EXIT_FAILURE);
 	}
 	qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
-	fread(qf->metadata, sizeof(qfmetadata), 1, fin);
+	int ret = fread(qf->metadata, sizeof(qfmetadata), 1, fin);
+	if (ret < 1) {
+		perror("Couldn't read metadata from file.");
+		exit(EXIT_FAILURE);
+	}
 
 	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
 	strcpy(qf->runtimedata->f_info.filepath, filename);
@@ -191,7 +195,11 @@ uint64_t qf_deserialize(QF *qf, enum lockingmode lock, const char *filename)
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
 																					sizeof(volatile int));
 	qf->blocks = (qfblock *)calloc(qf->metadata->total_size_in_bytes, 1);
-	fread(qf->blocks, qf->metadata->total_size_in_bytes, 1, fin);
+	ret = fread(qf->blocks, qf->metadata->total_size_in_bytes, 1, fin);
+	if (ret < 1) {
+		perror("Couldn't read data from file.");
+		exit(EXIT_FAILURE);
+	}
 	fclose(fin);
 
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
