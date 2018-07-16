@@ -834,7 +834,7 @@ static inline void shift_runends(QF *qf, int64_t first, uint64_t last,
 
 }
 
-static inline void insert_replace_slots_and_shift_remainders_and_runends_and_offsets(QF		*qf, 
+static inline bool insert_replace_slots_and_shift_remainders_and_runends_and_offsets(QF		*qf, 
 																																										 int		 operation, 
 																																										 uint64_t		 bucket_index,
 																																										 uint64_t		 overwrite_index,
@@ -851,6 +851,10 @@ static inline void insert_replace_slots_and_shift_remainders_and_runends_and_off
 	if (ninserts > 0) {
 		/* First, shift things to create n empty spaces where we need them. */
 		find_next_n_empty_slots(qf, insert_index, ninserts, empties);
+		if (empties[0] >= qf->metadata->xnslots) {
+			fprintf(stderr, "CQF is full. Can't insert.\n");
+			return false;
+		}
 
 		for (j = 0; j < ninserts - 1; j++)
 			shift_slots(qf, empties[j+1] + 1, empties[j] - 1, j + 1);
@@ -898,7 +902,7 @@ static inline void insert_replace_slots_and_shift_remainders_and_runends_and_off
 			while ((int64_t)npreceding_empties < ninserts &&
 						 empties[ninserts - 1 - npreceding_empties]  / SLOTS_PER_BLOCK < i)
 				npreceding_empties++;
-			
+
 			if (get_block(qf, i)->offset + ninserts - npreceding_empties < BITMASK(8*sizeof(qf->blocks[0].offset)))
 				get_block(qf, i)->offset += ninserts - npreceding_empties;
 			else
@@ -910,6 +914,8 @@ static inline void insert_replace_slots_and_shift_remainders_and_runends_and_off
 		set_slot(qf, overwrite_index + i, remainders[i]);
 	
 	modify_metadata(qf, &qf->metadata->noccupied_slots, ninserts);
+
+	return true;
 }
 
 static inline void remove_replace_slots_and_shift_remainders_and_runends_and_offsets(QF		        *qf,
@@ -1371,6 +1377,10 @@ static inline bool insert1(QF *qf, __uint128_t hash)
 
 		if (operation >= 0) {
 			uint64_t empty_slot_index = find_first_empty_slot(qf, runend_index+1);
+			if (empty_slot_index >= qf->metadata->xnslots) {
+				fprintf(stderr, "CQF is full. Can't insert.\n");
+				return false;
+			}
 
 			shift_remainders(qf, insert_index, empty_slot_index);
 
@@ -1443,7 +1453,7 @@ static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum
 	}
 
 	uint64_t runend_index             = run_end(qf, hash_bucket_index);
-	
+
 	/* Empty slot */
 	if (might_be_empty(qf, hash_bucket_index) && runend_index ==
 			hash_bucket_index) {
@@ -1452,7 +1462,7 @@ static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum
 		set_slot(qf, hash_bucket_index, hash_remainder);
 		METADATA_WORD(qf, occupieds, hash_bucket_index) |= 1ULL <<
 			(hash_bucket_block_offset % 64);
-		
+
 		modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
 		modify_metadata(qf, &qf->metadata->noccupied_slots, 1);
 		modify_metadata(qf, &qf->metadata->nelts, 1);
@@ -1466,15 +1476,18 @@ static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum
 																																	hash_bucket_index
 																																	- 1) + 1;
 
+		bool ret;
 		if (!is_occupied(qf, hash_bucket_index)) { /* Empty bucket, but its slot is occupied. */
 			uint64_t *p = encode_counter(qf, hash_remainder, count, &new_values[67]);
-			insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
-																																				0, 
-																																				hash_bucket_index, 
-																																				runstart_index, 
-																																				p, 
-																																				&new_values[67] - p, 
-																																				0);
+			ret = insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
+																																							0, 
+																																							hash_bucket_index, 
+																																							runstart_index, 
+																																							p, 
+																																							&new_values[67] - p, 
+																																							0);
+			if (!ret)
+				return false;
 			modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
 		} else { /* Non-empty bucket */
 
@@ -1493,40 +1506,46 @@ static inline bool insert(QF *qf, __uint128_t hash, uint64_t count, enum
 				 then append a counter for this remainder to the run. */
 			if (current_remainder < hash_remainder) {
 				uint64_t *p = encode_counter(qf, hash_remainder, count, &new_values[67]);
-				insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
-																																					1, /* Append to bucket */
-																																					hash_bucket_index, 
-																																					current_end + 1, 
-																																					p, 
-																																					&new_values[67] - p, 
-																																					0);
+				ret = insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
+																																								1, /* Append to bucket */
+																																								hash_bucket_index, 
+																																								current_end + 1, 
+																																								p, 
+																																								&new_values[67] - p, 
+																																								0);
+				if (!ret)
+					return false;
 				modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
 				/* Found a counter for this remainder.  Add in the new count. */
 			} else if (current_remainder == hash_remainder) {
 				uint64_t *p = encode_counter(qf, hash_remainder, current_count + count, &new_values[67]);
-				insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
-																																					is_runend(qf, current_end) ? 1 : 2, 
-																																					hash_bucket_index, 
-																																					runstart_index, 
-																																					p, 
-																																					&new_values[67] - p, 
-																																					current_end - runstart_index + 1);
+				ret = insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
+																																								is_runend(qf, current_end) ? 1 : 2, 
+																																								hash_bucket_index, 
+																																								runstart_index, 
+																																								p, 
+																																								&new_values[67] - p, 
+																																								current_end - runstart_index + 1);
+				if (!ret)
+					return false;
 				/* No counter for this remainder, but there are larger
 					 remainders, so we're not appending to the bucket. */
 			} else {
 				uint64_t *p = encode_counter(qf, hash_remainder, count, &new_values[67]);
-				insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
-																																					2, /* Insert to bucket */
-																																					hash_bucket_index, 
-																																					runstart_index, 
-																																					p, 
-																																					&new_values[67] - p, 
-																																					0);
+				ret = insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 
+																																								2, /* Insert to bucket */
+																																								hash_bucket_index, 
+																																								runstart_index, 
+																																								p, 
+																																								&new_values[67] - p, 
+																																								0);
+				if (!ret)
+					return false;
 				modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
 			}
 		}
 		METADATA_WORD(qf, occupieds, hash_bucket_index) |= 1ULL << (hash_bucket_block_offset % 64);
-		
+
 		modify_metadata(qf, &qf->metadata->nelts, count);
 	}
 
@@ -1854,8 +1873,10 @@ bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count)
 			fprintf(stdout, "Resizing the CQF.\n");
 			qf_resize_malloc(qf, qf->metadata->nslots * 2);
 		}
-		else
+		else {
+			fprintf(stderr, "CQF load factor is greater than 95%%. Can't insert.\n");
 			return false;
+		}
 	}
 	if (count == 0)
 		return true;
