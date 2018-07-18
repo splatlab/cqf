@@ -330,7 +330,7 @@ void *uniform_pregen_init(uint64_t maxoutputs, __uint128_t maxvalue, void *param
 	state->maxoutputs = maxoutputs;
 	state->outputs = (__uint128_t *)malloc(state->maxoutputs * sizeof(state->outputs[0]));
 	assert(state->outputs != NULL);
-	RAND_pseudo_bytes((unsigned char *)state->outputs, sizeof(*state->outputs) * state->maxoutputs);
+	RAND_bytes((unsigned char *)state->outputs, sizeof(*state->outputs) * state->maxoutputs);
 	for (i = 0; i < state->maxoutputs; i++)
 		state->outputs[i] = (1 * state->outputs[i]) % maxvalue;
 
@@ -515,7 +515,7 @@ void usage(char *name)
 				 "                  Default uniform_pregen ]\n"
 				 "  -d datastruct  [ Default gqf. ]\n"
 				 "  -a number of filters for merging  [ Default 0 ] [Optional]\n"
-				 "  -f outputfile  [ Default qf. ]\n"
+				 "  -f outputfile  [ Default gqf. ]\n"
 				 "  -i input file for app specific benchmark [Optional]\n"
 				 "  -v num of values in the input file [Optional]\n"
 				 "  -u universe for zipfian distribution  [ Default nvals ] [Optional]\n"
@@ -525,10 +525,10 @@ void usage(char *name)
 
 int main(int argc, char **argv)
 {
-	uint32_t nbits = 0, nruns = 0;
-	unsigned int npoints = 0;
-	uint64_t nslots = 0, nvals = 0;
-	double s = 1.5; long universe = 0;
+	uint32_t nbits = 24, nruns = 1;
+	unsigned int npoints = 20;
+	uint64_t nslots = (1ULL << nbits), nvals = 950*nslots/1000;
+	double s = 1.5; long universe = nvals;
 	int numvals = 0;
 	int numfilters = 0;
 	char *randmode = "uniform_pregen";
@@ -755,7 +755,7 @@ int main(int argc, char **argv)
 				}
 				gettimeofday(&tv_insert[exp+1][run], NULL);
 
-				i = (exp/2)*(nvals/20);
+				i = (exp/2)*(nvals/npoints);
 				gettimeofday(&tv_exit_lookup[exp][run], NULL);
 				for (;i < j; i += 1<<16) {
 					int nitems = j - i < 1<<16 ? j - i : 1<<16;
@@ -774,7 +774,7 @@ int main(int argc, char **argv)
 				}
 				gettimeofday(&tv_exit_lookup[exp+1][run], NULL);
 
-				i = (exp/2)*(nvals/20);
+				i = (exp/2)*(nvals/npoints);
 				gettimeofday(&tv_false_lookup[exp][run], NULL);
 				for (;i < j; i += 1<<16) {
 					int nitems = j - i < 1<<16 ? j - i : 1<<16;

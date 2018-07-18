@@ -53,7 +53,7 @@ int main(int argc, char **argv)
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
-	RAND_pseudo_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
+	RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
 	for (uint64_t i = 0; i < nvals; i++) {
 		vals[i] = (1 * vals[i]) % qf.metadata->range;
 	}
