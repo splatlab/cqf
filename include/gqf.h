@@ -20,173 +20,50 @@
 #define _GQF_H_
 
 #include <inttypes.h>
-#include <pthread.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-	/* Can be 
-		 0 (choose size at run-time), 
-		 8, 16, 32, or 64 (for optimized versions),
-		 or other integer <= 56 (for compile-time-optimized bit-shifting-based versions)
-		 */
-#define BITS_PER_SLOT 0
-
-#define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : (1ULL << (nbits)) \
-												- 1ULL)
-
-	/* Must be >= 6.  6 seems fastest. */
-#define BLOCK_OFFSET_BITS (6)
-
-#define SLOTS_PER_BLOCK (1ULL << BLOCK_OFFSET_BITS)
-#define METADATA_WORDS_PER_BLOCK ((SLOTS_PER_BLOCK + 63) / 64)
-
-#define NUM_SLOTS_TO_LOCK (1ULL<<16)
-#define CLUSTER_SIZE (1ULL<<14)
-
-#define METADATA_WORD(qf,field,slot_index) (get_block((qf), (slot_index) / \
-																											SLOTS_PER_BLOCK)->field[((slot_index)  % SLOTS_PER_BLOCK) / 64])
-
-#define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
-#define BILLION 1000000000L
-
-	typedef struct __attribute__ ((__packed__)) qfblock {
-		/* Code works with uint16_t, uint32_t, etc, but uint8_t seems just as fast as
-		 * anything else */
-		uint8_t offset; 
-		uint64_t occupieds[METADATA_WORDS_PER_BLOCK];
-		uint64_t runends[METADATA_WORDS_PER_BLOCK];
-
-#if BITS_PER_SLOT == 8
-		uint8_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT == 16
-		uint16_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT == 32
-		uint32_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT == 64
-		uint64_t  slots[SLOTS_PER_BLOCK];
-#elif BITS_PER_SLOT != 0
-		uint8_t   slots[SLOTS_PER_BLOCK * BITS_PER_SLOT / 8];
-#else
-		uint8_t   slots[];
-#endif
-	} qfblock;
-
-	struct __attribute__ ((__packed__)) qfblock;
-	typedef struct qfblock qfblock;
-
-	enum hashmode {
+	enum qf_hashmode {
 		DEFAULT,
 		INVERTIBLE,
 		NONE
 	};
 
-	enum lockingmode {
+	enum qf_lockingmode {
 		LOCKS_FORBIDDEN,
 		LOCKS_OPTIONAL,
 		LOCKS_REQUIRED
 	};
 
-	typedef struct file_info {
-		int fd;
-		char *filepath;
-	} file_info;
-
-	// The below struct is used to instrument the code.
-	// It is not used in normal operations of the CQF.
-	typedef struct {
-		uint64_t total_time_single;
-		uint64_t total_time_spinning;
-		uint64_t locks_taken;
-		uint64_t locks_acquired_single_attempt;
-	} wait_time_data;
-
-	typedef struct quotient_filter_runtime_data {
-		file_info f_info;
-		uint64_t num_locks;
-		enum lockingmode lock_mode;
-		volatile int metadata_lock;
-		volatile int *locks;
-		wait_time_data *wait_times;
-	} quotient_filter_runtime_data;
-
-	typedef quotient_filter_runtime_data qfruntime;
-
-	typedef struct quotient_filter_metadata {
-		enum hashmode hash_mode;
-		uint32_t auto_resize;
-		uint64_t total_size_in_bytes;
-		uint32_t seed;
-		uint64_t nslots;
-		uint64_t xnslots;
-		uint64_t key_bits;
-		uint64_t value_bits;
-		uint64_t key_remainder_bits;
-		uint64_t bits_per_slot;
-		__uint128_t range;
-		uint64_t nblocks;
-		uint64_t nelts;
-		uint64_t ndistinct_elts;
-		uint64_t noccupied_slots;
-	} quotient_filter_metadata;
-
-	typedef quotient_filter_metadata qfmetadata;
-
-	typedef struct quotient_filter {
-		qfruntime *runtimedata;
-		qfmetadata *metadata;
-		qfblock *blocks;
-	} quotient_filter;
-
+	typedef struct quotient_filter_s quotient_filter;
 	typedef quotient_filter QF;
 
-	// The below struct is used to instrument the code.
-	// It is not used in normal operations of the CQF.
-	typedef struct {
-		uint64_t start_index;
-		uint16_t length;
-	} cluster_data;
-
-	typedef struct quotient_filter_iterator {
-		const QF *qf;
-		uint64_t run;
-		uint64_t current;
-		uint64_t cur_start_index;
-		uint16_t cur_length;
-		uint32_t num_clusters;
-		cluster_data *c_info;
-	} quotient_filter_iterator;
-
+  typedef struct quotient_filter_iterator_s quotient_filter_iterator;
 	typedef quotient_filter_iterator QFi;
 
 	/* Forward declaration for the macro. */
 	void qf_dump_metadata(const QF *qf);
-
-#define DEBUG_CQF(fmt, ...) \
-	do { if (PRINT_DEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
-
-#define DEBUG_DUMP(qf) \
-	do { if (PRINT_DEBUG) qf_dump_metadata(qf); } while (0)
 
 	/* Initialize the CQF at "buffer".
 	 * If there is not enough space at buffer then it will return the total size
 	 * needed in bytes to initialize the CQF.
 	 * */
 	uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-									 value_bits, enum lockingmode lock, enum hashmode hash,
+									 value_bits, enum qf_lockingmode lock, enum qf_hashmode hash,
 									 uint32_t seed, void* buffer, uint64_t buffer_len);
 
 	/* Read the CQF stored at "buffer". */
-	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum lockingmode
+	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum qf_lockingmode
 									lock);
 
 	void *qf_destroy(QF *qf);
 
 	/* Initialize the CQF and allocate memory for the CQF. */
 	bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-								 value_bits, enum lockingmode lock, enum hashmode hash,
+								 value_bits, enum qf_lockingmode lock, enum qf_hashmode hash,
 								 uint32_t seed);
 
 	bool qf_free(QF *qf);
