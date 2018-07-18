@@ -20,6 +20,7 @@
 #define GQF_WRAPPER_H
 
 #include "gqf.h"
+#include "gqf_int.h"
 #include "gqf_file.h"
 
 QF g_quotient_filter;
