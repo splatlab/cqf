@@ -31,7 +31,6 @@
 #include "include/gqf.h"
 #include "include/gqf_int.h"
 #include "include/gqf_file.h"
-#include "include/hashutil.h"
 
 int main(int argc, char **argv)
 {
@@ -60,8 +59,17 @@ int main(int argc, char **argv)
 
 	/* Insert vals in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
-		if (!qf_insert(&qf, vals[i], 0, key_count)) {
+		int ret = qf_insert(&qf, vals[i], 0, key_count, NO_LOCK);
+		if (ret < 0) {
 			fprintf(stderr, "failed insertion for key: %lx %d.\n", vals[i], 50);
+			if (ret == -1)
+				fprintf(stderr, "CQF is full.\n");
+			else if (ret == -2)
+				fprintf(stderr, "TRY_ONCE_LOCK failed.\n");
+			else if (ret == -3)
+				fprintf(stderr, "Runtime lock does not satisfy the init time lock.\n");
+			else
+				fprintf(stderr, "Does not recognise return value.\n");
 			abort();
 		}
 	}

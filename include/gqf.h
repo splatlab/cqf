@@ -38,6 +38,12 @@ extern "C" {
 		LOCKS_REQUIRED
 	};
 
+	enum qf_runtimelockingmode {
+		WAIT_FOR_LOCK,
+		TRY_ONCE_LOCK,
+		NO_LOCK
+	};
+
 	typedef struct quotient_filter_s quotient_filter;
 	typedef quotient_filter QF;
 
@@ -87,17 +93,28 @@ extern "C" {
 
 	void qf_set_auto_resize(QF* qf);
 
-	/* Increment the counter for this key/value pair by count. */
-	bool qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count);
+	/* Increment the counter for this key/value pair by count. 
+	 * Return value:
+	 *    >= 0: distance from the home slot to the slot in which the key is
+	 *          inserted.
+	 *    = -1: the CQF has reached capacity.
+	 *    = -2: TRY_ONCE_LOCK has failed to acquire the lock.
+	 *    = -3: runtime lock does not satisfy the init time lock.
+	 */
+	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+								qf_runtimelockingmode runtime_lock);
 
 	/* Set the counter for this key/value pair to count. */
-	bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count);
+	bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+										qf_runtimelockingmode runtime_lock);
 
 	/* Remove count instances of this key/value combination. */
-	bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count);
+	bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+								 qf_runtimelockingmode runtime_lock);
 
 	/* Remove all instances of this key/value pair. */
-	bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value);
+	bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum
+													 qf_runtimelockingmode runtime_lock);
 
 	/* Remove all instances of this key. */
 	void qf_delete_key(QF *qf, uint64_t key);
