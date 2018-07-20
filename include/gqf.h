@@ -32,12 +32,6 @@ extern "C" {
 		NONE
 	};
 
-	enum qf_lockingmode {
-		LOCKS_FORBIDDEN,
-		LOCKS_OPTIONAL,
-		LOCKS_REQUIRED
-	};
-
 	enum qf_runtimelockingmode {
 		WAIT_FOR_LOCK,
 		TRY_ONCE_LOCK,
@@ -58,19 +52,17 @@ extern "C" {
 	 * needed in bytes to initialize the CQF.
 	 * */
 	uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-									 value_bits, enum qf_lockingmode lock, enum qf_hashmode hash,
-									 uint32_t seed, void* buffer, uint64_t buffer_len);
+									 value_bits, enum qf_hashmode hash, uint32_t seed, void*
+									 buffer, uint64_t buffer_len);
 
 	/* Read the CQF stored at "buffer". */
-	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum qf_lockingmode
-									lock);
+	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len);
 
 	void *qf_destroy(QF *qf);
 
 	/* Initialize the CQF and allocate memory for the CQF. */
 	bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-								 value_bits, enum qf_lockingmode lock, enum qf_hashmode hash,
-								 uint32_t seed);
+								 value_bits, enum qf_hashmode hash, uint32_t seed);
 
 	bool qf_free(QF *qf);
 

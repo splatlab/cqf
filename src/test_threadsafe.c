@@ -83,6 +83,13 @@ void multi_threaded_insertion(insert_args args[], int tcnt)
 
 int main(int argc, char **argv)
 {
+	if (argc < 4) {
+		fprintf(stderr, "Please specify three arguments: \n \
+            1. log of the number of slots in the CQF.\n \
+            2. frequency count of keys.\n \
+            3. number of threads.\n");
+		exit(1);
+	}
 	QF cfr;
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t freq = atoi(argv[2]);
@@ -95,7 +102,7 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 	
 	/* Initialise the CQF */
-	if (!qf_malloc(&cfr, nslots, nhashbits, 0, LOCKS_REQUIRED, INVERTIBLE, 0)) {
+	if (!qf_malloc(&cfr, nslots, nhashbits, 0, INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}

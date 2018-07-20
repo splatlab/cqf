@@ -67,7 +67,6 @@ extern "C" {
 	typedef struct quotient_filter_runtime_data {
 		file_info f_info;
 		uint64_t num_locks;
-		enum qf_lockingmode lock_mode;
 		volatile int metadata_lock;
 		volatile int *locks;
 		wait_time_data *wait_times;

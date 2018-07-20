@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	if (!qf_malloc(&qf, nslots, nhashbits, 0, LOCKS_FORBIDDEN, INVERTIBLE, 0)) {
+	if (!qf_malloc(&qf, nslots, nhashbits, 0, INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
 
 	QF file_qf;
 	fprintf(stdout, "Reading the CQF from disk.\n");
-	if (!qf_usefile(&file_qf, LOCKS_FORBIDDEN, filename)) {
+	if (!qf_usefile(&file_qf, filename)) {
 		fprintf(stderr, "Can't initialize the CQF from file: %s.\n", filename);
 		abort();
 	}
@@ -117,8 +117,7 @@ int main(int argc, char **argv)
 	QFi qfi;
 	qf_iterator(&qf, &qfi, 0);
 	QF unique_idx;
-	if (!qf_malloc(&unique_idx, nslots, nhashbits, 0, LOCKS_FORBIDDEN,
-								 INVERTIBLE, 0)) {
+	if (!qf_malloc(&unique_idx, nslots, nhashbits, 0, INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate set.\n");
 		abort();
 	}

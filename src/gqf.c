@@ -257,9 +257,9 @@ static void modify_metadata(QF *qf, uint64_t *metadata, int cnt)
 {
 #ifdef LOG_WAIT_TIME
 	qf_spin_lock(qf, &qf->runtimedata->metadata_lock,
-							 qf->runtimedata->num_locks, LOCK_AND_SPIN);
+							 qf->runtimedata->num_locks, WAIT_FOR_LOCK);
 #else
-	qf_spin_lock(&qf->runtimedata->metadata_lock, LOCKS_REQUIRED);
+	qf_spin_lock(&qf->runtimedata->metadata_lock, WAIT_FOR_LOCK);
 #endif
 	*metadata = *metadata + cnt;
 	qf_spin_unlock(&qf->runtimedata->metadata_lock);
@@ -1645,8 +1645,8 @@ inline static int _remove(QF *qf, __uint128_t hash, uint64_t count, enum
  ***********************************************************************/
 
 uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
-								 enum qf_lockingmode lock, enum qf_hashmode hash, uint32_t seed,
-								 void* buffer, uint64_t buffer_len)
+								 enum qf_hashmode hash, uint32_t seed, void* buffer, uint64_t
+								 buffer_len)
 {
 	uint64_t num_slots, xnslots, nblocks;
 	uint64_t key_remainder_bits, bits_per_slot;
@@ -1701,7 +1701,6 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->metadata->ndistinct_elts = 0;
 	qf->metadata->noccupied_slots = 0;
 
-	qf->runtimedata->lock_mode = lock;
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
 	qf->runtimedata->f_info.filepath = NULL;
 
@@ -1718,8 +1717,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	return total_num_bytes;
 }
 
-uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum qf_lockingmode
-								lock)
+uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len)
 {
 	qf->metadata = (qfmetadata *)(buffer);
 	if (qf->metadata->total_size_in_bytes + sizeof(qfmetadata) > buffer_len) {
@@ -1728,7 +1726,6 @@ uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len, enum qf_lockingmode
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
 	qf->runtimedata = (qfruntime *)calloc(sizeof(qfruntime), 1);
-	qf->runtimedata->lock_mode = lock;
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
@@ -1751,11 +1748,10 @@ void *qf_destroy(QF *qf)
 }
 
 bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-							 value_bits, enum qf_lockingmode lock, enum qf_hashmode hash, uint32_t
-							 seed)
+							 value_bits, enum qf_hashmode hash, uint32_t seed)
 {
 	uint64_t total_num_bytes = qf_init(qf, nslots, key_bits, value_bits,
-																		 lock, hash, seed, NULL, 0);
+																		 hash, seed, NULL, 0);
 
 	void *buffer = malloc(total_num_bytes);
 	if (buffer == NULL) {
@@ -1769,8 +1765,8 @@ bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 		exit(EXIT_FAILURE);
 	}
 
-	uint64_t init_size = qf_init(qf, nslots, key_bits, value_bits, lock, hash,
-															 seed, buffer, total_num_bytes);
+	uint64_t init_size = qf_init(qf, nslots, key_bits, value_bits, hash, seed,
+															 buffer, total_num_bytes);
 
 	if (init_size == total_num_bytes)
 		return true;
@@ -1828,8 +1824,7 @@ int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 	else
 		new_hashmode = qf->metadata->hash_mode;
 	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits,
-								 qf->metadata->value_bits, qf->runtimedata->lock_mode,
-								 new_hashmode, qf->metadata->seed))
+								 qf->metadata->value_bits, new_hashmode, qf->metadata->seed))
 		return false;
 	if (qf->metadata->auto_resize)
 		qf_set_auto_resize(&new_qf);
@@ -1873,10 +1868,8 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 	else
 		new_hashmode = qf->metadata->hash_mode;
 	uint64_t init_size = qf_init(&new_qf, nslots, qf->metadata->key_bits,
-															 qf->metadata->value_bits,
-															 qf->runtimedata->lock_mode,
-															 new_hashmode, qf->metadata->seed,
-															 buffer, buffer_len);
+															 qf->metadata->value_bits, new_hashmode,
+															 qf->metadata->seed, buffer, buffer_len);
 
 	if (init_size > buffer_len)
 		return init_size;
@@ -1914,15 +1907,6 @@ void qf_set_auto_resize(QF* qf)
 int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 							 qf_runtimelockingmode runtime_lock)
 {
-	// check for the runtime lock.
-	if (qf->runtimedata->lock_mode == LOCKS_REQUIRED && runtime_lock == NO_LOCK)
-		return -3;
-	else if (qf->runtimedata->lock_mode == LOCKS_FORBIDDEN && (runtime_lock ==
-																														 WAIT_FOR_LOCK ||
-																														 runtime_lock ==
-																														 TRY_ONCE_LOCK))
-		return -3;
-
 	// We fill up the CQF up to 95% load factor.
 	// This is a very conservative check.
 	if (qf->metadata->noccupied_slots >= qf->metadata->xnslots * 0.95) {
@@ -1975,15 +1959,6 @@ int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 							 qf_runtimelockingmode runtime_lock)
 {
-	// check for the runtime lock.
-	if (qf->runtimedata->lock_mode == LOCKS_REQUIRED && runtime_lock == NO_LOCK)
-		return -3;
-	else if (qf->runtimedata->lock_mode == LOCKS_FORBIDDEN && (runtime_lock ==
-																														 WAIT_FOR_LOCK ||
-																														 runtime_lock ==
-																														 TRY_ONCE_LOCK))
-		return -3;
-
 	if (count == 0)
 		return true;
 

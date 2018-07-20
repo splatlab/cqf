@@ -504,7 +504,7 @@ void usage(char *name)
 {
 	printf("%s [OPTIONS]\n"
 				 "Options are:\n"
-				 "  -n nslots     [ log_2 of filter capacity.  Default 24 ]\n"
+				 "  -n nslots     [ log_2 of filter capacity.  Default 22 ]\n"
 				 "  -r nruns      [ number of runs.  Default 1 ]\n"
 				 "  -p npoints    [ number of points on the graph.  Default 20 ]\n"
 				 "  -m randmode   [ Data distribution, one of \n"
@@ -525,7 +525,7 @@ void usage(char *name)
 
 int main(int argc, char **argv)
 {
-	uint32_t nbits = 24, nruns = 1;
+	uint32_t nbits = 22, nruns = 1;
 	unsigned int npoints = 20;
 	uint64_t nslots = (1ULL << nbits), nvals = 950*nslots/1000;
 	double s = 1.5; long universe = nvals;

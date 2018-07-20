@@ -29,8 +29,7 @@ QFi g_quotient_filter_itr;
 extern inline int gqf_init(uint64_t nbits, uint64_t num_hash_bits)
 {
 	uint64_t nslots = 1 << nbits;
-	qf_malloc(&g_quotient_filter, nslots, num_hash_bits, 0, LOCKS_FORBIDDEN,
-						NONE, 0);
+	qf_malloc(&g_quotient_filter, nslots, num_hash_bits, 0, NONE, 0);
 	return 0;
 }
 
