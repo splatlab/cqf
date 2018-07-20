@@ -119,6 +119,10 @@ uint64_t qf_usefile(QF* qf, enum qf_lockingmode lock, const char* filename)
 #endif
 	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
 																		MAP_SHARED, qf->runtimedata->f_info.fd, 0);
+	if (qf->metadata->magic_endian_number != MAGIC_NUMBER) {
+		fprintf(stderr, "Can't read the CQF. It was written on a different endian machine.");
+		exit(EXIT_FAILURE);
+	}
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
@@ -185,6 +189,10 @@ uint64_t qf_deserialize(QF *qf, enum qf_lockingmode lock, const char *filename)
 	int ret = fread(qf->metadata, sizeof(qfmetadata), 1, fin);
 	if (ret < 1) {
 		perror("Couldn't read metadata from file.");
+		exit(EXIT_FAILURE);
+	}
+	if (qf->metadata->magic_endian_number != MAGIC_NUMBER) {
+		fprintf(stderr, "Can't read the CQF. It was written on a different endian machine.");
 		exit(EXIT_FAILURE);
 	}
 

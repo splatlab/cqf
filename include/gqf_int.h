@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#define MAGIC_NUMBER 1018874902021329732
+
 /* Can be 
    0 (choose size at run-time), 
    8, 16, 32, or 64 (for optimized versions),
@@ -74,6 +76,7 @@ extern "C" {
 	typedef quotient_filter_runtime_data qfruntime;
 
 	typedef struct quotient_filter_metadata {
+		uint64_t magic_endian_number;
 		enum qf_hashmode hash_mode;
 		uint32_t auto_resize;
 		uint64_t total_size_in_bytes;

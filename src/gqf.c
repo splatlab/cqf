@@ -1681,6 +1681,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->metadata = (qfmetadata *)(buffer);
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
+	qf->metadata->magic_endian_number = MAGIC_NUMBER;
 	qf->metadata->auto_resize = 0;
 	qf->metadata->hash_mode = hash;
 	qf->metadata->total_size_in_bytes = size;
