@@ -1,4 +1,4 @@
-TARGETS=main bm
+TARGETS=test test_threadsafe bm
 
 ifdef D
 	DEBUG=-g
@@ -38,13 +38,24 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 
-main:		$(OBJDIR)/main.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o $(OBJDIR)/hashutil.o
-bm:		$(OBJDIR)/bm.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o $(OBJDIR)/zipf.o $(OBJDIR)/hashutil.o
+test:								$(OBJDIR)/test.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o \
+										$(OBJDIR)/hashutil.o
+
+test_threadsafe:		$(OBJDIR)/test_threadsafe.o $(OBJDIR)/gqf.o \
+										$(OBJDIR)/gqf_file.o $(OBJDIR)/hashutil.o
+
+bm:									$(OBJDIR)/bm.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o \
+										$(OBJDIR)/zipf.o $(OBJDIR)/hashutil.o
 
 # dependencies between .o files and .h files
 
-$(OBJDIR)/main.o: 	$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/gqf_file.h $(LOC_INCLUDE)/hashutil.h
-$(OBJDIR)/bm.o:			$(LOC_INCLUDE)/gqf_wrapper.h
+$(OBJDIR)/test.o: 						$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/gqf_file.h \
+															$(LOC_INCLUDE)/hashutil.h
+
+$(OBJDIR)/test_threadsafe.o: 	$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/gqf_file.h \
+															$(LOC_INCLUDE)/hashutil.h
+
+$(OBJDIR)/bm.o:								$(LOC_INCLUDE)/gqf_wrapper.h
 
 # dependencies between .o files and .cc (or .c) files
 

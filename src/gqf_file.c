@@ -32,16 +32,19 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include "hashutil.h"
 #include "gqf.h"
+#include "gqf_int.h"
 #include "gqf_file.h"
 
+#define NUM_SLOTS_TO_LOCK (1ULL<<16)
 
 bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-								 value_bits, enum lockingmode lock, enum hashmode hash,
-								 uint32_t seed, char* filename)
+								 value_bits, enum qf_hashmode hash, uint32_t seed, char*
+								 filename)
 {
-	uint64_t total_num_bytes = qf_init(qf, nslots, key_bits, value_bits,
-																		 lock, hash, seed, NULL, 0);
+	uint64_t total_num_bytes = qf_init(qf, nslots, key_bits, value_bits, hash,
+																		 seed, NULL, 0);
 
 	int ret;
 	qf->runtimedata = (qfruntime *)calloc(sizeof(qfruntime), 1);
@@ -69,8 +72,8 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 	}
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
-	uint64_t init_size = qf_init(qf, nslots, key_bits, value_bits, lock, hash,
-															 seed, qf->metadata, total_num_bytes);
+	uint64_t init_size = qf_init(qf, nslots, key_bits, value_bits, hash, seed,
+															 qf->metadata, total_num_bytes);
 	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
 	strcpy(qf->runtimedata->f_info.filepath, filename);
 
@@ -80,7 +83,7 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 		return false;
 }
 
-uint64_t qf_usefile(QF* qf, enum lockingmode lock, const char* filename)
+uint64_t qf_usefile(QF* qf, const char* filename)
 {
 	struct stat sb;
 	int ret;
@@ -105,7 +108,6 @@ uint64_t qf_usefile(QF* qf, enum lockingmode lock, const char* filename)
 
 	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
 	strcpy(qf->runtimedata->f_info.filepath, filename);
-	qf->runtimedata->lock_mode = lock;
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
@@ -116,6 +118,10 @@ uint64_t qf_usefile(QF* qf, enum lockingmode lock, const char* filename)
 #endif
 	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
 																		MAP_SHARED, qf->runtimedata->f_info.fd, 0);
+	if (qf->metadata->magic_endian_number != MAGIC_NUMBER) {
+		fprintf(stderr, "Can't read the CQF. It was written on a different endian machine.");
+		exit(EXIT_FAILURE);
+	}
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
@@ -164,7 +170,7 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }
 
-uint64_t qf_deserialize(QF *qf, enum lockingmode lock, const char *filename)
+uint64_t qf_deserialize(QF *qf, const char *filename)
 {
 	FILE *fin;
 	fin = fopen(filename, "rb");
@@ -184,20 +190,23 @@ uint64_t qf_deserialize(QF *qf, enum lockingmode lock, const char *filename)
 		perror("Couldn't read metadata from file.");
 		exit(EXIT_FAILURE);
 	}
+	if (qf->metadata->magic_endian_number != MAGIC_NUMBER) {
+		fprintf(stderr, "Can't read the CQF. It was written on a different endian machine.");
+		exit(EXIT_FAILURE);
+	}
 
 	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
 	strcpy(qf->runtimedata->f_info.filepath, filename);
 	/* initlialize the locks in the QF */
-	qf->runtimedata->lock_mode = lock;
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
 	qf->runtimedata->metadata_lock = 0;
 	/* initialize all the locks to 0 */
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
-																					sizeof(volatile int));
+																									sizeof(volatile int));
 	qf->blocks = (qfblock *)calloc(qf->metadata->total_size_in_bytes, 1);
 	ret = fread(qf->blocks, qf->metadata->total_size_in_bytes, 1, fin);
 	if (ret < 1) {
-		perror("Couldn't read data from file.");
+		perror("Couldn't read metadata from file.");
 		exit(EXIT_FAILURE);
 	}
 	fclose(fin);
