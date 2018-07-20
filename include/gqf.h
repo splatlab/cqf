@@ -75,7 +75,6 @@ extern "C" {
 	/* Allocate a new CQF using "nslots" and copy elements from "qf" into it. 
 	 * Return value:
 	 *    >= 0: number of keys copied during resizing.
-	 *    = -3: runtime lock does not satisfy the init time lock.
 	 * */
 	int64_t qf_resize_malloc(QF *qf, uint64_t nslots);
 
@@ -95,7 +94,6 @@ extern "C" {
 	 *          inserted.
 	 *    = -1: the CQF has reached capacity.
 	 *    = -2: TRY_ONCE_LOCK has failed to acquire the lock.
-	 *    = -3: runtime lock does not satisfy the init time lock.
 	 */
 	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 								qf_runtimelockingmode runtime_lock);
@@ -109,7 +107,6 @@ extern "C" {
 	 *    >= 0: number of slots freed.
 	 *    < -1: deletion error.
 	 *    = -2: TRY_ONCE_LOCK has failed to acquire the lock.
-	 *    = -3: runtime lock does not satisfy the init time lock.
 	 */
 	int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 								 qf_runtimelockingmode runtime_lock);
