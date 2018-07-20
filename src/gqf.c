@@ -2090,6 +2090,43 @@ uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value)
 	return 0;
 }
 
+int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value)
+{
+	if (qf->metadata->hash_mode == DEFAULT)
+		key = MurmurHash64A(((void *)&key), sizeof(key),
+																	qf->metadata->seed) % qf->metadata->range;
+	else if (qf->metadata->hash_mode == INVERTIBLE)
+		key = hash_64(key, BITMASK(qf->metadata->key_bits));
+
+	uint64_t hash = (key << qf->metadata->value_bits) | (value &
+																											 BITMASK(qf->metadata->value_bits));
+	uint64_t hash_remainder   = hash & BITMASK(qf->metadata->bits_per_slot);
+	int64_t hash_bucket_index = hash >> qf->metadata->bits_per_slot;
+
+	if (!is_occupied(qf, hash_bucket_index))
+		return -1;
+
+	int64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf,
+																																hash_bucket_index-1)
+		+ 1;
+	if (runstart_index < hash_bucket_index)
+		runstart_index = hash_bucket_index;
+
+	/* printf("MC RUNSTART: %02lx RUNEND: %02lx\n", runstart_index, runend_index); */
+
+	uint64_t current_remainder, current_count, current_end;
+	do {
+		current_end = decode_counter(qf, runstart_index, &current_remainder,
+																 &current_count);
+		if (current_remainder == hash_remainder)
+			return runstart_index;
+
+		runstart_index = current_end + 1;
+	} while (!is_runend(qf, current_end));
+
+	return -1;
+}
+
 /* initialize the iterator at the run corresponding
  * to the position index
  */

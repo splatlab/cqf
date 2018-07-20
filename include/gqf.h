@@ -142,8 +142,7 @@ extern "C" {
 		 key/value pair in the QF.  If it returns 0, then, the key is not
 		 present in the QF. Only returns the first value associated with key
 		 in the QF.  If you want to see others, use an iterator. */
-	/* NOT IMPLEMENTED YET. */
-	//uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value);
+	uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value);
 
 	/* Return the number of times key has been inserted, with any value,
 		 into qf. */
@@ -153,6 +152,11 @@ extern "C" {
 	/* Return the number of times key has been inserted, with the given
 		 value, into qf. */
 	uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value);
+
+	/* Returns a unique index corresponding to the key in the CQF.
+	 * If the key is not found then returns -1.
+	 */
+	int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value);
 
 	/* Initialize an iterator */
 	bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position);

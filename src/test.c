@@ -112,10 +112,16 @@ int main(int argc, char **argv)
 		}
 	}
 
-	fprintf(stdout, "Testing iterator.\n");
+	fprintf(stdout, "Testing iterator and unique indexes.\n");
 	/* Initialize an iterator and validate counts. */
 	QFi qfi;
 	qf_iterator(&qf, &qfi, 0);
+	QF unique_idx;
+	if (!qf_malloc(&unique_idx, nslots, nhashbits, 0, LOCKS_FORBIDDEN,
+								 INVERTIBLE, 0)) {
+		fprintf(stderr, "Can't allocate set.\n");
+		abort();
+	}
 	do {
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
@@ -124,6 +130,14 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
 							key, count);
 			abort();
+		}
+		int64_t idx = qf_get_unique_index(&qf, key, value);
+		if (qf_count_key_value(&unique_idx, idx, 0) > 0) {
+			fprintf(stderr, "Failed unique index for: %lx. index: %ld\n",
+							key, idx);
+			abort();
+		} else {
+			qf_insert(&unique_idx, idx, 0, 1, NO_LOCK);
 		}
 	} while(!qfi_end(&qfi));
 
