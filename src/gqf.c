@@ -934,7 +934,7 @@ static inline bool insert_replace_slots_and_shift_remainders_and_runends_and_off
 	return true;
 }
 
-static inline void remove_replace_slots_and_shift_remainders_and_runends_and_offsets(QF		        *qf,
+static inline int remove_replace_slots_and_shift_remainders_and_runends_and_offsets(QF		        *qf,
 																																										 int		 operation,
 																																										 uint64_t		 bucket_index,
 																																										 uint64_t		 overwrite_index,
@@ -966,6 +966,7 @@ static inline void remove_replace_slots_and_shift_remainders_and_runends_and_off
 	uint64_t current_bucket = bucket_index;
 	uint64_t current_slot = overwrite_index + total_remainders;
 	uint64_t current_distance = old_length - total_remainders;
+	int ret_current_distance = current_distance;
 
 	while (current_distance > 0) {
 		if (is_runend(qf, current_slot + current_distance - 1)) {
@@ -1046,6 +1047,8 @@ static inline void remove_replace_slots_and_shift_remainders_and_runends_and_off
 		modify_metadata(qf, &qf->metadata->ndistinct_elts, -1);
 		/*qf->metadata->ndistinct_elts--;*/
 	}
+
+	return ret_current_distance;
 }
 
 /*****************************************************************************
@@ -1210,6 +1213,7 @@ static inline uint64_t next_slot(QF *qf, uint64_t current)
 static inline int insert1(QF *qf, __uint128_t hash, enum qf_runtimelockingmode
 													runtime_lock)
 {
+	int ret_distance = 0;
 	uint64_t hash_remainder           = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index        = hash >> qf->metadata->bits_per_slot;
 	uint64_t hash_bucket_block_offset = hash_bucket_index % QF_SLOTS_PER_BLOCK;
@@ -1224,7 +1228,8 @@ static inline int insert1(QF *qf, __uint128_t hash, enum qf_runtimelockingmode
 		set_slot(qf, hash_bucket_index, hash_remainder);
 		METADATA_WORD(qf, occupieds, hash_bucket_index) |= 1ULL <<
 			(hash_bucket_block_offset % 64);
-
+		
+		ret_distance = 0;
 		modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
 		modify_metadata(qf, &qf->metadata->noccupied_slots, 1);
 		modify_metadata(qf, &qf->metadata->nelts, 1);
@@ -1400,6 +1405,7 @@ static inline int insert1(QF *qf, __uint128_t hash, enum qf_runtimelockingmode
 			shift_remainders(qf, insert_index, empty_slot_index);
 
 			set_slot(qf, insert_index, new_value);
+			ret_distance = insert_index - hash_bucket_index;
 
 			shift_runends(qf, insert_index, empty_slot_index-1, 1);
 			switch (operation) {
@@ -1451,12 +1457,13 @@ static inline int insert1(QF *qf, __uint128_t hash, enum qf_runtimelockingmode
 		qf_unlock(qf, hash_bucket_index, /*small*/ true);
 	}
 
-	return true;
+	return ret_distance;
 }
 
 static inline int insert(QF *qf, __uint128_t hash, uint64_t count, enum
 													qf_runtimelockingmode runtime_lock)
 {
+	int ret_distance = 0;
 	uint64_t hash_remainder           = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index        = hash >> qf->metadata->bits_per_slot;
 	uint64_t hash_bucket_block_offset = hash_bucket_index % QF_SLOTS_PER_BLOCK;
@@ -1504,6 +1511,7 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, enum
 			if (!ret)
 				return -1;
 			modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
+			ret_distance = runstart_index - hash_bucket_index;
 		} else { /* Non-empty bucket */
 
 			uint64_t current_remainder, current_count, current_end;
@@ -1531,6 +1539,7 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, enum
 				if (!ret)
 					return -1;
 				modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
+				ret_distance = (current_end + 1) - hash_bucket_index;
 				/* Found a counter for this remainder.  Add in the new count. */
 			} else if (current_remainder == hash_remainder) {
 				uint64_t *p = encode_counter(qf, hash_remainder, current_count + count, &new_values[67]);
@@ -1543,6 +1552,7 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, enum
 																																					current_end - runstart_index + 1);
 			if (!ret)
 				return -1;
+			ret_distance = runstart_index - hash_bucket_index;
 				/* No counter for this remainder, but there are larger
 					 remainders, so we're not appending to the bucket. */
 			} else {
@@ -1557,6 +1567,7 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, enum
 				if (!ret)
 					return -1;
 				modify_metadata(qf, &qf->metadata->ndistinct_elts, 1);
+			ret_distance = runstart_index - hash_bucket_index;
 			}
 		}
 		METADATA_WORD(qf, occupieds, hash_bucket_index) |= 1ULL << (hash_bucket_block_offset % 64);
@@ -1568,12 +1579,13 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, enum
 		qf_unlock(qf, hash_bucket_index, /*small*/ false);
 	}
 
-	return true;
+	return ret_distance;
 }
 
-inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum
+inline static int _remove(QF *qf, __uint128_t hash, uint64_t count, enum
 													qf_runtimelockingmode runtime_lock)
 {
+	int ret_numfreedslots = 0;
 	uint64_t hash_remainder           = hash & BITMASK(qf->metadata->bits_per_slot);
 	uint64_t hash_bucket_index        = hash >> qf->metadata->bits_per_slot;
 	uint64_t current_remainder, current_count, current_end;
@@ -1581,12 +1593,12 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum
 
 	if (runtime_lock != NO_LOCK) {
 		if (!qf_lock(qf, hash_bucket_index, /*small*/ false, runtime_lock))
-			return false;
+			return -2;
 	}
 
 	/* Empty bucket */
 	if (!is_occupied(qf, hash_bucket_index))
-		return false;
+		return -1;
 
 	uint64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
 	uint64_t original_runstart_index = runstart_index;
@@ -1600,7 +1612,7 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum
 	}
 	/* remainder not found in the given run */
 	if (current_remainder != hash_remainder)
-		return false;
+		return -1;
 	
 	if (original_runstart_index == runstart_index && is_runend(qf, current_end))
 		only_item_in_the_run = 1;
@@ -1609,7 +1621,7 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum
 	uint64_t *p = encode_counter(qf, hash_remainder,
 															 count > current_count ? 0 : current_count - count,
 															 &new_values[67]);
-	remove_replace_slots_and_shift_remainders_and_runends_and_offsets(qf,
+	ret_numfreedslots = remove_replace_slots_and_shift_remainders_and_runends_and_offsets(qf,
 																																		only_item_in_the_run,
 																																		hash_bucket_index,
 																																		runstart_index,
@@ -1625,7 +1637,7 @@ inline static bool _remove(QF *qf, __uint128_t hash, uint64_t count, enum
 		qf_unlock(qf, hash_bucket_index, /*small*/ false);
 	}
 
-	return true;
+	return ret_numfreedslots;
 }
 
 /***********************************************************************
@@ -1806,7 +1818,7 @@ void qf_reset(QF *qf)
 #endif
 }
 
-bool qf_resize_malloc(QF *qf, uint64_t nslots)
+int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 {
 	QF new_qf;
 	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits,
@@ -1819,20 +1831,23 @@ bool qf_resize_malloc(QF *qf, uint64_t nslots)
 	// copy keys from qf into new_qf
 	QFi qfi;
 	qf_iterator(qf, &qfi, 0);
+	int64_t ret_numkeys = 0;
 	do {
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
 		qfi_next(&qfi);
-		if (!qf_insert(&new_qf, key, value, count, NO_LOCK)) {
+		int ret = qf_insert(&new_qf, key, value, count, NO_LOCK);
+		if (ret < 0) {
 			fprintf(stderr, "Failed to insert key: %ld into the new CQF.\n", key);
-			abort();
+			return ret;
 		}
+		ret_numkeys++;
 	} while(!qfi_end(&qfi));
 
 	qf_free(qf);
 	memcpy(qf, &new_qf, sizeof(QF));
 
-	return true;
+	return ret_numkeys;
 }
 
 uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
@@ -1863,7 +1878,8 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
 		qfi_next(&qfi);
-		if (!qf_insert(&new_qf, key, value, count, NO_LOCK)) {
+		int ret = qf_insert(&new_qf, key, value, count, NO_LOCK);
+		if (ret < 0) {
 			fprintf(stderr, "Failed to insert key: %ld into the new CQF.\n", key);
 			abort();
 		}
@@ -1912,34 +1928,47 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 
 	uint64_t hash = (key << qf->metadata->value_bits) | (value &
 																											 BITMASK(qf->metadata->value_bits));
+	int ret;
 	if (count == 1)
-		return insert1(qf, hash, runtime_lock);
+		ret = insert1(qf, hash, runtime_lock);
 	else
-		return insert(qf, hash, count, runtime_lock);
+		ret = insert(qf, hash, count, runtime_lock);
 
-	return 0;
+	return ret;
 }
 
-bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 							 qf_runtimelockingmode runtime_lock)
 {
 	if (count == 0)
-		return true;
+		return 0;
 
 	uint64_t cur_count = qf_count_key_value(qf, key, value);
 	int64_t delta = count - cur_count;
 
+	int ret;
 	if (delta == 0)
-		return true;
+		ret = 0;
 	else if (delta > 0)
-		return qf_insert(qf, key, value, delta, runtime_lock);
+		ret = qf_insert(qf, key, value, delta, runtime_lock);
 	else
-		return qf_remove(qf, key, value, labs(delta), runtime_lock);
+		ret = qf_remove(qf, key, value, labs(delta), runtime_lock);
+
+	return ret;
 }
 
-bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 							 qf_runtimelockingmode runtime_lock)
 {
+	// check for the runtime lock.
+	if (qf->runtimedata->lock_mode == LOCKS_REQUIRED && runtime_lock == NO_LOCK)
+		return -3;
+	else if (qf->runtimedata->lock_mode == LOCKS_FORBIDDEN && (runtime_lock ==
+																														 WAIT_FOR_LOCK ||
+																														 runtime_lock ==
+																														 TRY_ONCE_LOCK))
+		return -3;
+
 	if (count == 0)
 		return true;
 
@@ -1954,7 +1983,7 @@ bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 	return _remove(qf, hash, count, runtime_lock);
 }
 
-bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum
+int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum
 							 qf_runtimelockingmode runtime_lock)
 {
 	uint64_t count = qf_count_key_value(qf, key, value);

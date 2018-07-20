@@ -34,6 +34,10 @@
 
 int main(int argc, char **argv)
 {
+	if (argc < 2) {
+		fprintf(stderr, "Please specify the log of the number of slots in the CQF.\n");
+		exit(1);
+	}
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t nhashbits = qbits + 8;
@@ -57,7 +61,7 @@ int main(int argc, char **argv)
 		vals[i] = (1 * vals[i]) % qf.metadata->range;
 	}
 
-	/* Insert vals in the CQF */
+	/* Insert keys in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
 		int ret = qf_insert(&qf, vals[i], 0, key_count, NO_LOCK);
 		if (ret < 0) {
@@ -73,6 +77,8 @@ int main(int argc, char **argv)
 			abort();
 		}
 	}
+
+	/* Lookup inserted keys and counts. */
 	for (uint64_t i = 0; i < nvals; i++) {
 		uint64_t count = qf_count_key_value(&qf, vals[i], 0);
 		if (count < key_count) {
@@ -82,6 +88,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* Write the CQF to disk and read it back. */
 	char filename[] = "mycqf.cqf";
 	fprintf(stdout, "Serializing the CQF to disk.\n");
 	uint64_t total_size = qf_serialize(&qf, filename);
@@ -105,8 +112,9 @@ int main(int argc, char **argv)
 		}
 	}
 
+	fprintf(stdout, "Validating the iterator.\n");
+	/* Initialize an iterator and validate counts. */
 	QFi qfi;
-	/* Initialize an iterator */
 	qf_iterator(&qf, &qfi, 0);
 	do {
 		uint64_t key, value, count;
@@ -118,6 +126,28 @@ int main(int argc, char **argv)
 			abort();
 		}
 	} while(!qfi_end(&qfi));
+
+	/* remove some counts  (or keys) and validate. */
+	fprintf(stdout, "Testing remove/delete_key.\n");
+	srand(time(NULL));
+	for (uint64_t i = 0; i < 100; i++) {
+		uint64_t idx = rand()%nvals;
+		int ret = qf_delete_key_value(&file_qf, vals[idx], 0, NO_LOCK);
+		uint64_t count = qf_count_key_value(&file_qf, vals[idx], 0);
+		if (count > 0) {
+			if (ret < 0) {
+				fprintf(stderr, "failed deletion for %lx %ld ret code: %d.\n",
+								vals[idx], count, ret);
+				abort();
+			}
+			uint64_t new_count = qf_count_key_value(&file_qf, vals[idx], 0);
+			if (new_count > 0) {
+				fprintf(stderr, "delete key failed for %lx %ld new count: %ld.\n",
+								vals[idx], count, new_count);
+				abort();
+			}
+		}
+	}
 
 	fprintf(stdout, "Validated the CQF.\n");
 }

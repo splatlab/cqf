@@ -80,8 +80,12 @@ extern "C" {
 	 * as the src QF before calling this function. */
 	void qf_copy(QF *dest, const QF *src);
 
-	/* Allocate a new CQF using "nslots" and copy elements from "qf" into it. */
-	bool qf_resize_malloc(QF *qf, uint64_t nslots);
+	/* Allocate a new CQF using "nslots" and copy elements from "qf" into it. 
+	 * Return value:
+	 *    >= 0: number of keys copied during resizing.
+	 *    = -3: runtime lock does not satisfy the init time lock.
+	 * */
+	int64_t qf_resize_malloc(QF *qf, uint64_t nslots);
 
 	/* Allocate a new CQF using "nslots" at "buffer" and copy elements from "qf"
 	 * into it. 
@@ -105,15 +109,21 @@ extern "C" {
 								qf_runtimelockingmode runtime_lock);
 
 	/* Set the counter for this key/value pair to count. */
-	bool qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+	int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 										qf_runtimelockingmode runtime_lock);
 
-	/* Remove count instances of this key/value combination. */
-	bool qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
+	/* Remove count instances of this key/value combination. 
+	 * Return value:
+	 *    >= 0: number of slots freed.
+	 *    < -1: deletion error.
+	 *    = -2: TRY_ONCE_LOCK has failed to acquire the lock.
+	 *    = -3: runtime lock does not satisfy the init time lock.
+	 */
+	int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
 								 qf_runtimelockingmode runtime_lock);
 
 	/* Remove all instances of this key/value pair. */
-	bool qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum
+	int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum
 													 qf_runtimelockingmode runtime_lock);
 
 	/* Remove all instances of this key. */
