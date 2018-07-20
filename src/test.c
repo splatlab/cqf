@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	if (!qf_malloc(&qf, nslots, nhashbits, 0, LOCKS_FORBIDDEN, DEFAULT, 0)) {
+	if (!qf_malloc(&qf, nslots, nhashbits, 0, LOCKS_FORBIDDEN, INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}

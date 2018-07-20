@@ -1822,9 +1822,14 @@ void qf_reset(QF *qf)
 int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 {
 	QF new_qf;
+	enum qf_hashmode new_hashmode;
+	if (qf->metadata->hash_mode == DEFAULT)
+		new_hashmode = NONE;
+	else
+		new_hashmode = qf->metadata->hash_mode;
 	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits,
 								 qf->metadata->value_bits, qf->runtimedata->lock_mode,
-								 NONE, qf->metadata->seed))
+								 new_hashmode, qf->metadata->seed))
 		return false;
 	if (qf->metadata->auto_resize)
 		qf_set_auto_resize(&new_qf);
@@ -1845,7 +1850,8 @@ int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 		ret_numkeys++;
 	} while(!qfi_end(&qfi));
 
-	new_qf.metadata->hash_mode = qf->metadata->hash_mode;
+	if (qf->metadata->hash_mode == DEFAULT)
+		new_qf.metadata->hash_mode = qf->metadata->hash_mode;
 	qf_free(qf);
 	memcpy(qf, &new_qf, sizeof(QF));
 
@@ -1861,10 +1867,15 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 		exit(EXIT_FAILURE);
 	}
 
+	enum qf_hashmode new_hashmode;
+	if (qf->metadata->hash_mode == DEFAULT)
+		new_hashmode = NONE;
+	else
+		new_hashmode = qf->metadata->hash_mode;
 	uint64_t init_size = qf_init(&new_qf, nslots, qf->metadata->key_bits,
 															 qf->metadata->value_bits,
 															 qf->runtimedata->lock_mode,
-															 NONE, qf->metadata->seed,
+															 new_hashmode, qf->metadata->seed,
 															 buffer, buffer_len);
 
 	if (init_size > buffer_len)
@@ -1887,7 +1898,8 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 		}
 	} while(!qfi_end(&qfi));
 
-	new_qf.metadata->hash_mode = qf->metadata->hash_mode;
+	if (qf->metadata->hash_mode == DEFAULT)
+		new_qf.metadata->hash_mode = qf->metadata->hash_mode;
 	qf_free(qf);
 	memcpy(qf, &new_qf, sizeof(QF));
 
@@ -2202,6 +2214,9 @@ int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 	current_remainder = current_remainder >> qfi->qf->metadata->value_bits;
 	*key = (qfi->run << qfi->qf->metadata->key_remainder_bits) | current_remainder;
 	*count = current_count; 
+
+	if (qfi->qf->metadata->hash_mode == INVERTIBLE)
+		*key = hash_64i(*key, BITMASK(qfi->qf->metadata->key_bits));
 
 	return 0;
 }
