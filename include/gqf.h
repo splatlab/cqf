@@ -127,24 +127,28 @@ extern "C" {
 													 qf_runtimelockingmode runtime_lock);
 
 	/* Remove all instances of this key. */
-	void qf_delete_key(QF *qf, uint64_t key);
+	/* NOT IMPLEMENTED YET. */
+	//void qf_delete_key(QF *qf, uint64_t key);
 
 	/* Replace the association (key, oldvalue, count) with the association
 		 (key, newvalue, count). If there is already an association (key,
 		 newvalue, count'), then the two associations will be merged and
 		 their counters will be summed, resulting in association (key,
 		 newvalue, count' + count). */
-	void qf_replace(QF *qf, uint64_t key, uint64_t oldvalue, uint64_t newvalue);
+	/* NOT IMPLEMENTED YET. */
+	//void qf_replace(QF *qf, uint64_t key, uint64_t oldvalue, uint64_t newvalue);
 
 	/* Lookup the value associated with key.  Returns the count of that
 		 key/value pair in the QF.  If it returns 0, then, the key is not
 		 present in the QF. Only returns the first value associated with key
 		 in the QF.  If you want to see others, use an iterator. */
-	uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value);
+	/* NOT IMPLEMENTED YET. */
+	//uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value);
 
 	/* Return the number of times key has been inserted, with any value,
 		 into qf. */
-	uint64_t qf_count_key(const QF *qf, uint64_t key);
+	/* NOT IMPLEMENTED YET. */
+	//uint64_t qf_count_key(const QF *qf, uint64_t key);
 
 	/* Return the number of times key has been inserted, with the given
 		 value, into qf. */
