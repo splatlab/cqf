@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	if (!qf_malloc(&qf, nslots, nhashbits, 0, LOCKS_FORBIDDEN, INVERTIBLE, 0)) {
+	if (!qf_malloc(&qf, nslots, nhashbits, 0, LOCKS_FORBIDDEN, DEFAULT, 0)) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
@@ -112,7 +112,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	fprintf(stdout, "Validating the iterator.\n");
+	fprintf(stdout, "Testing iterator.\n");
 	/* Initialize an iterator and validate counts. */
 	QFi qfi;
 	qf_iterator(&qf, &qfi, 0);
@@ -120,7 +120,7 @@ int main(int argc, char **argv)
 		uint64_t key, value, count;
 		qfi_get(&qfi, &key, &value, &count);
 		qfi_next(&qfi);
-		if (qf_count_key_value(&qf, key, 0) < key_count) {
+		if (count < key_count) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
 							key, count);
 			abort();
