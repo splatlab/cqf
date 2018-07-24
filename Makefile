@@ -57,10 +57,12 @@ $(OBJDIR)/test_threadsafe.o: 	$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/gqf_file.h \
 
 $(OBJDIR)/bm.o:								$(LOC_INCLUDE)/gqf_wrapper.h
 
+
 # dependencies between .o files and .cc (or .c) files
 
-$(OBJDIR)/%.o: $(LOC_SRC)/%.cc
-$(OBJDIR)/%.o: $(LOC_SRC)/%.c
+$(OBJDIR)/gqf.o:							$(LOC_SRC)/gqf.c $(LOC_INCLUDE)/gqf.h
+$(OBJDIR)/gqf_file.o:					$(LOC_SRC)/gqf_file.c $(LOC_INCLUDE)/gqf_file.h
+$(OBJDIR)/hashutil.o:					$(LOC_SRC)/hashutil.c $(LOC_INCLUDE)/hashutil.h
 
 #
 # generic build rules
@@ -69,12 +71,15 @@ $(OBJDIR)/%.o: $(LOC_SRC)/%.c
 $(TARGETS):
 	$(LD) $^ -o $@ $(LDFLAGS)
 
-$(OBJDIR)/%.o: $(LOC_SRC)/%.cc
+$(OBJDIR)/%.o: $(LOC_SRC)/%.cc | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
-$(OBJDIR)/%.o: $(LOC_SRC)/%.c
+$(OBJDIR)/%.o: $(LOC_SRC)/%.c | $(OBJDIR)
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
+$(OBJDIR):
+	@mkdir -p $(OBJDIR)
+
 clean:
-	rm -f $(OBJDIR)/*.o $(TARGETS) core
+	rm -rf $(OBJDIR) $(TARGETS) core
 
