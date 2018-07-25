@@ -80,7 +80,7 @@ int main(int argc, char **argv)
 
 	/* Lookup inserted keys and counts. */
 	for (uint64_t i = 0; i < nvals; i++) {
-		uint64_t count = qf_count_key_value(&qf, vals[i], 0);
+		uint64_t count = qf_count_key_value(&qf, vals[i], 0, 0);
 		if (count < key_count) {
 			fprintf(stderr, "failed lookup after insertion for %lx %ld.\n", vals[i],
 							count);
@@ -104,7 +104,7 @@ int main(int argc, char **argv)
 		abort();
 	}
 	for (uint64_t i = 0; i < nvals; i++) {
-		uint64_t count = qf_count_key_value(&file_qf, vals[i], 0);
+		uint64_t count = qf_count_key_value(&file_qf, vals[i], 0, 0);
 		if (count < key_count) {
 			fprintf(stderr, "failed lookup in file based CQF for %lx %ld.\n",
 							vals[i], count);
@@ -130,8 +130,8 @@ int main(int argc, char **argv)
 							key, count);
 			abort();
 		}
-		int64_t idx = qf_get_unique_index(&qf, key, value);
-		if (qf_count_key_value(&unique_idx, idx, 0) > 0) {
+		int64_t idx = qf_get_unique_index(&qf, key, value, 0);
+		if (qf_count_key_value(&unique_idx, idx, 0, 0) > 0) {
 			fprintf(stderr, "Failed unique index for: %lx. index: %ld\n",
 							key, idx);
 			abort();
@@ -146,14 +146,14 @@ int main(int argc, char **argv)
 	for (uint64_t i = 0; i < 100; i++) {
 		uint64_t idx = rand()%nvals;
 		int ret = qf_delete_key_value(&file_qf, vals[idx], 0, NO_LOCK);
-		uint64_t count = qf_count_key_value(&file_qf, vals[idx], 0);
+		uint64_t count = qf_count_key_value(&file_qf, vals[idx], 0, 0);
 		if (count > 0) {
 			if (ret < 0) {
 				fprintf(stderr, "failed deletion for %lx %ld ret code: %d.\n",
 								vals[idx], count, ret);
 				abort();
 			}
-			uint64_t new_count = qf_count_key_value(&file_qf, vals[idx], 0);
+			uint64_t new_count = qf_count_key_value(&file_qf, vals[idx], 0, 0);
 			if (new_count > 0) {
 				fprintf(stderr, "delete key failed for %lx %ld new count: %ld.\n",
 								vals[idx], count, new_count);
