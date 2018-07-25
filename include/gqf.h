@@ -1,5 +1,5 @@
 /*
- * =====================================================================================
+ * ============================================================================
  *
  *       Filename:  gqf.h
  *
@@ -13,7 +13,7 @@
  *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
  *   Organization:  Stony Brook University
  *
- * =====================================================================================
+ * ============================================================================
  */
 
 #ifndef _GQF_H_
@@ -26,22 +26,21 @@
 extern "C" {
 #endif
 
+#define NO_LOCK (0x00)
+#define TRY_ONCE_LOCK (0x01)
+#define WAIT_FOR_LOCK (0x02)
+#define KEY_IS_HASH (0x04)
+
 	enum qf_hashmode {
 		DEFAULT,
 		INVERTIBLE,
 		NONE
 	};
 
-	enum qf_runtimelockingmode {
-		WAIT_FOR_LOCK,
-		TRY_ONCE_LOCK,
-		NO_LOCK
-	};
-
 	typedef struct quotient_filter_s quotient_filter;
 	typedef quotient_filter QF;
 
-  typedef struct quotient_filter_iterator_s quotient_filter_iterator;
+	typedef struct quotient_filter_iterator_s quotient_filter_iterator;
 	typedef quotient_filter_iterator QFi;
 
 	/* Forward declaration for the macro. */
@@ -95,12 +94,12 @@ extern "C" {
 	 *    = -1: the CQF has reached capacity.
 	 *    = -2: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
-	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
-								qf_runtimelockingmode runtime_lock);
+	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
+								flags);
 
 	/* Set the counter for this key/value pair to count. */
-	int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
-										qf_runtimelockingmode runtime_lock);
+	int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count,
+									 uint8_t flags);
 
 	/* Remove count instances of this key/value combination. 
 	 * Return value:
@@ -108,12 +107,11 @@ extern "C" {
 	 *    < -1: deletion error.
 	 *    = -2: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
-	int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, enum
-								 qf_runtimelockingmode runtime_lock);
+	int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
+								flags);
 
 	/* Remove all instances of this key/value pair. */
-	int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, enum
-													 qf_runtimelockingmode runtime_lock);
+	int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, uint8_t flags);
 
 	/* Remove all instances of this key. */
 	/* NOT IMPLEMENTED YET. */
@@ -131,7 +129,8 @@ extern "C" {
 		 key/value pair in the QF.  If it returns 0, then, the key is not
 		 present in the QF. Only returns the first value associated with key
 		 in the QF.  If you want to see others, use an iterator. */
-	uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value);
+	uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t
+										flags);
 
 	/* Return the number of times key has been inserted, with any value,
 		 into qf. */
@@ -140,12 +139,14 @@ extern "C" {
 
 	/* Return the number of times key has been inserted, with the given
 		 value, into qf. */
-	uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value);
+	uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value,
+															uint8_t flags);
 
 	/* Returns a unique index corresponding to the key in the CQF.
 	 * If the key is not found then returns -1.
 	 */
-	int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value);
+	int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value,
+															uint8_t flags);
 
 	/* Initialize an iterator */
 	bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position);
@@ -166,7 +167,7 @@ extern "C" {
 	 * the QF. 
 	 */
 	int qfi_get_hash(const QFi *qfi, uint64_t *hash, uint64_t *value, uint64_t
-									*count);
+									 *count);
 
 	/* Advance to next entry.  Returns whether or not another entry is
 		 found.  */

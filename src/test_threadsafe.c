@@ -129,7 +129,7 @@ int main(int argc, char **argv)
 	fprintf(stdout, "Inserted all items: %ld\n", args[tcnt-1].end);
 
 	for (uint64_t i = 0; i < args[tcnt-1].end; i++) {
-		uint64_t count = qf_count_key_value(&cfr, vals[i], 0);
+		uint64_t count = qf_count_key_value(&cfr, vals[i], 0, 0);
 		if (count < freq) {
 			fprintf(stderr, "failed lookup after insertion for %lx %ld.\n", vals[i],
 							count);
@@ -144,7 +144,7 @@ int main(int argc, char **argv)
 		uint64_t key, value, count;
 		qfi_get_key(&cfir, &key, &value, &count);
 		qfi_next(&cfir);
-		if (qf_count_key_value(&cfr, key, 0) < freq) {
+		if (qf_count_key_value(&cfr, key, 0, 0) < freq) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
 							key, count);
 			abort();
