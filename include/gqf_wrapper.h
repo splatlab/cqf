@@ -41,7 +41,7 @@ extern inline int gqf_insert(__uint128_t val, uint64_t count)
 
 extern inline int gqf_lookup(__uint128_t val)
 {
-	return qf_count_key_value(&g_quotient_filter, val, 0);
+	return qf_count_key_value(&g_quotient_filter, val, 0, 0);
 }
 
 extern inline __uint128_t gqf_range()
