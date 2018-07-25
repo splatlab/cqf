@@ -65,7 +65,7 @@ extern inline int gqf_iterator(uint64_t pos)
  * end of the QF. */
 extern inline int gqf_get(uint64_t *key, uint64_t *value, uint64_t *count)
 {
-	return qfi_get(&g_quotient_filter_itr, key, value, count);
+	return qfi_get_hash(&g_quotient_filter_itr, key, value, count);
 }
 
 /* Advance to next entry.  Returns whether or not another entry is

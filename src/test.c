@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 	}
 	do {
 		uint64_t key, value, count;
-		qfi_get(&qfi, &key, &value, &count);
+		qfi_get_key(&qfi, &key, &value, &count);
 		qfi_next(&qfi);
 		if (count < key_count) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",

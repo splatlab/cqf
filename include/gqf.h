@@ -156,10 +156,17 @@ extern "C" {
 
 	/* Returns 0 if the iterator is still valid (i.e. has not reached the end of
 	 * the QF. 
-	 * If the hash mode is DEFAULT then it returns the hash of the key.
-	 * If the hash mode is INVERTIBLE or NONE then it returns the actual key.
+	 * If the hash mode is INVERTIBLE or NONE.
+	 * If the hash mode is DEFAULT then returns -1.
 	 */
-	int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count);
+	int qfi_get_key(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
+									*count);
+
+	/* Returns 0 if the iterator is still valid (i.e. has not reached the end of
+	 * the QF. 
+	 */
+	int qfi_get_hash(const QFi *qfi, uint64_t *hash, uint64_t *value, uint64_t
+									*count);
 
 	/* Advance to next entry.  Returns whether or not another entry is
 		 found.  */
