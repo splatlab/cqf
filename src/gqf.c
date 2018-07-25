@@ -1818,13 +1818,8 @@ void qf_reset(QF *qf)
 int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 {
 	QF new_qf;
-	enum qf_hashmode new_hashmode;
-	if (qf->metadata->hash_mode == DEFAULT)
-		new_hashmode = NONE;
-	else
-		new_hashmode = qf->metadata->hash_mode;
 	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits,
-								 qf->metadata->value_bits, new_hashmode, qf->metadata->seed))
+								 qf->metadata->value_bits, NONE, qf->metadata->seed))
 		return false;
 	if (qf->metadata->auto_resize)
 		qf_set_auto_resize(&new_qf);
@@ -1835,7 +1830,7 @@ int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 	int64_t ret_numkeys = 0;
 	do {
 		uint64_t key, value, count;
-		qfi_get(&qfi, &key, &value, &count);
+		qfi_get_hash(&qfi, &key, &value, &count);
 		qfi_next(&qfi);
 		int ret = qf_insert(&new_qf, key, value, count, NO_LOCK);
 		if (ret < 0) {
@@ -1845,8 +1840,7 @@ int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 		ret_numkeys++;
 	} while(!qfi_end(&qfi));
 
-	if (qf->metadata->hash_mode == DEFAULT)
-		new_qf.metadata->hash_mode = qf->metadata->hash_mode;
+	new_qf.metadata->hash_mode = qf->metadata->hash_mode;
 	qf_free(qf);
 	memcpy(qf, &new_qf, sizeof(QF));
 
@@ -1862,13 +1856,8 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 		exit(EXIT_FAILURE);
 	}
 
-	enum qf_hashmode new_hashmode;
-	if (qf->metadata->hash_mode == DEFAULT)
-		new_hashmode = NONE;
-	else
-		new_hashmode = qf->metadata->hash_mode;
 	uint64_t init_size = qf_init(&new_qf, nslots, qf->metadata->key_bits,
-															 qf->metadata->value_bits, new_hashmode,
+															 qf->metadata->value_bits, NONE,
 															 qf->metadata->seed, buffer, buffer_len);
 
 	if (init_size > buffer_len)
@@ -1882,7 +1871,7 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 	qf_iterator(qf, &qfi, 0);
 	do {
 		uint64_t key, value, count;
-		qfi_get(&qfi, &key, &value, &count);
+		qfi_get_hash(&qfi, &key, &value, &count);
 		qfi_next(&qfi);
 		int ret = qf_insert(&new_qf, key, value, count, NO_LOCK);
 		if (ret < 0) {
@@ -1891,8 +1880,7 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 		}
 	} while(!qfi_end(&qfi));
 
-	if (qf->metadata->hash_mode == DEFAULT)
-		new_qf.metadata->hash_mode = qf->metadata->hash_mode;
+	new_qf.metadata->hash_mode = qf->metadata->hash_mode;
 	qf_free(qf);
 	memcpy(qf, &new_qf, sizeof(QF));
 
@@ -2215,7 +2203,8 @@ bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash)
 	return true;
 }
 
-int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
+static int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
+									 *count)
 {
 	assert(qfi->current < qfi->qf->metadata->nslots);
 
@@ -2227,8 +2216,27 @@ int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t *count)
 	*key = (qfi->run << qfi->qf->metadata->key_remainder_bits) | current_remainder;
 	*count = current_count; 
 
+	return 0;
+}
+
+int qfi_get_key(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
+								*count)
+{
+	qfi_get(qfi, key, value, count);
 	if (qfi->qf->metadata->hash_mode == INVERTIBLE)
 		*key = hash_64i(*key, BITMASK(qfi->qf->metadata->key_bits));
+	else if (qfi->qf->metadata->hash_mode == DEFAULT) {
+		*key = 0; *value = 0; *count = 0;
+		return -1;
+	}
+
+	return 0;
+}
+
+int qfi_get_hash(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
+								 *count)
+{
+	qfi_get(qfi, key, value, count);
 
 	return 0;
 }
@@ -2323,36 +2331,46 @@ void qf_merge(const QF *qfa, const QF *qfb, QF *qfc)
 	qf_iterator(qfa, &qfia, 0);
 	qf_iterator(qfb, &qfib, 0);
 
+	if (qfa->metadata->hash_mode != qfc->metadata->hash_mode &&
+			qfa->metadata->seed != qfc->metadata->seed &&
+			qfb->metadata->hash_mode  != qfc->metadata->hash_mode &&
+			qfb->metadata->seed  != qfc->metadata->seed) {
+		fprintf(stderr, "Output QF and input QFs do not have the same hash mode or seed.\n");
+		exit(1);
+	}
+
+	qfc->metadata->hash_mode = NONE;
+
 	uint64_t keya, valuea, counta, keyb, valueb, countb;
-	qfi_get(&qfia, &keya, &valuea, &counta);
-	qfi_get(&qfib, &keyb, &valueb, &countb);
+	qfi_get_hash(&qfia, &keya, &valuea, &counta);
+	qfi_get_hash(&qfib, &keyb, &valueb, &countb);
 	do {
 		if (keya < keyb) {
 			qf_insert(qfc, keya, valuea, counta, NO_LOCK);
 			qfi_next(&qfia);
-			qfi_get(&qfia, &keya, &valuea, &counta);
+			qfi_get_hash(&qfia, &keya, &valuea, &counta);
 		}
 		else {
 			qf_insert(qfc, keyb, valueb, countb, NO_LOCK);
 			qfi_next(&qfib);
-			qfi_get(&qfib, &keyb, &valueb, &countb);
+			qfi_get_hash(&qfib, &keyb, &valueb, &countb);
 		}
 	} while(!qfi_end(&qfia) && !qfi_end(&qfib));
 
 	if (!qfi_end(&qfia)) {
 		do {
-			qfi_get(&qfia, &keya, &valuea, &counta);
+			qfi_get_hash(&qfia, &keya, &valuea, &counta);
 			qf_insert(qfc, keya, valuea, counta, NO_LOCK);
 		} while(!qfi_next(&qfia));
 	}
 	if (!qfi_end(&qfib)) {
 		do {
-			qfi_get(&qfib, &keyb, &valueb, &countb);
+			qfi_get_hash(&qfib, &keyb, &valueb, &countb);
 			qf_insert(qfc, keyb, valueb, countb, NO_LOCK);
 		} while(!qfi_next(&qfib));
 	}
 
-	return;
+	qfc->metadata->hash_mode = qfa->metadata->hash_mode;
 }
 
 /*
@@ -2365,8 +2383,15 @@ void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr)
 	int smallest_idx = 0;
 	uint64_t smallest_key = UINT64_MAX;
 	for (i=0; i<nqf; i++) {
+		if (qf_arr[i]->metadata->hash_mode != qfr->metadata->hash_mode &&
+				qf_arr[i]->metadata->seed != qfr->metadata->seed) {
+			fprintf(stderr, "Output QF and input QFs do not have the same hash mode or seed.\n");
+			exit(1);
+		}
 		qf_iterator(qf_arr[i], &qfi_arr[i], 0);
 	}
+
+	qfr->metadata->hash_mode = NONE;
 
 	DEBUG_CQF("Merging %d CQFs\n", nqf);
 	for (i=0; i<nqf; i++) {
@@ -2379,7 +2404,7 @@ void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr)
 		uint64_t values[nqf];
 		uint64_t counts[nqf];
 		for (i=0; i<nqf; i++)
-			qfi_get(&qfi_arr[i], &keys[i], &values[i], &counts[i]);
+			qfi_get_hash(&qfi_arr[i], &keys[i], &values[i], &counts[i]);
 		
 		do {
 			smallest_key = UINT64_MAX;
@@ -2388,9 +2413,11 @@ void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr)
 					smallest_key = keys[i]; smallest_idx = i;
 				}
 			}
-			qf_insert(qfr, keys[smallest_idx], values[smallest_idx], counts[smallest_idx], NO_LOCK);
+			qf_insert(qfr, keys[smallest_idx], values[smallest_idx],
+								counts[smallest_idx], NO_LOCK);
 			qfi_next(&qfi_arr[smallest_idx]);
-			qfi_get(&qfi_arr[smallest_idx], &keys[smallest_idx], &values[smallest_idx],
+			qfi_get_hash(&qfi_arr[smallest_idx], &keys[smallest_idx],
+									 &values[smallest_idx],
 							&counts[smallest_idx]);
 		} while(!qfi_end(&qfi_arr[smallest_idx]));
 
@@ -2404,13 +2431,15 @@ void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr)
 		uint64_t iters = 0;
 		do {
 			uint64_t key, value, count;
-			qfi_get(&qfi_arr[0], &key, &value, &count);
+			qfi_get_hash(&qfi_arr[0], &key, &value, &count);
 			qf_insert(qfr, key, value, count, NO_LOCK);
 			qfi_next(&qfi_arr[0]);
 			iters++;
 		} while(!qfi_end(&qfi_arr[0]));
 		DEBUG_CQF("Num of iterations: %lu\n", iters);
 	}
+
+	qfr->metadata->hash_mode = qf_arr[0]->metadata->hash_mode;
 
 	DEBUG_CQF("%s", "Final CQF after merging.\n");
 	DEBUG_DUMP(qfr);
@@ -2424,6 +2453,12 @@ uint64_t qf_inner_product(const QF *qfa, const QF *qfb)
 	uint64_t acc = 0;
 	QFi qfi;
 	const QF *qf_mem, *qf_disk;
+
+	if (qfa->metadata->hash_mode != qfb->metadata->hash_mode &&
+			qfa->metadata->seed != qfb->metadata->seed) {
+		fprintf(stderr, "Input QFs do not have the same hash mode or seed.\n");
+		exit(1);
+	}
 
 	// create the iterator on the larger QF.
 	if (qfa->metadata->total_size_in_bytes > qfb->metadata->total_size_in_bytes)
@@ -2439,7 +2474,7 @@ uint64_t qf_inner_product(const QF *qfa, const QF *qfb)
 	do {
 		uint64_t key = 0, value = 0, count = 0;
 		uint64_t count_mem;
-		qfi_get(&qfi, &key, &value, &count);
+		qfi_get_hash(&qfi, &key, &value, &count);
 		if ((count_mem = qf_count_key_value(qf_mem, key, 0)) > 0) {
 			acc += count*count_mem;
 		}
@@ -2454,6 +2489,16 @@ void qf_intersect(const QF *qfa, const QF *qfb, QF *qfr)
 	QFi qfi;
 	const QF *qf_mem, *qf_disk;
 
+	if (qfa->metadata->hash_mode != qfr->metadata->hash_mode &&
+			qfa->metadata->seed != qfr->metadata->seed &&
+			qfb->metadata->hash_mode  != qfr->metadata->hash_mode &&
+			qfb->metadata->seed  != qfr->metadata->seed) {
+		fprintf(stderr, "Output QF and input QFs do not have the same hash mode or seed.\n");
+		exit(1);
+	}
+
+	qfr->metadata->hash_mode = NONE;
+
 	// create the iterator on the larger QF.
 	if (qfa->metadata->total_size_in_bytes > qfb->metadata->total_size_in_bytes)
 	{
@@ -2467,10 +2512,12 @@ void qf_intersect(const QF *qfa, const QF *qfb, QF *qfr)
 	qf_iterator(qf_disk, &qfi, 0);
 	do {
 		uint64_t key = 0, value = 0, count = 0;
-		qfi_get(&qfi, &key, &value, &count);
+		qfi_get_hash(&qfi, &key, &value, &count);
 		if (qf_count_key_value(qf_mem, key, 0) > 0)
 			qf_insert(qfr, key, value, count, NO_LOCK);
 	} while (!qfi_next(&qfi));
+
+	qfr->metadata->hash_mode = qfa->metadata->hash_mode;
 }
 
 /* magnitude of a QF. */

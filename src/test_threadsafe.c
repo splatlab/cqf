@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 	qf_iterator(&cfr, &cfir, 0);
 	do {
 		uint64_t key, value, count;
-		qfi_get(&cfir, &key, &value, &count);
+		qfi_get_key(&cfir, &key, &value, &count);
 		qfi_next(&cfir);
 		if (qf_count_key_value(&cfr, key, 0) < freq) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
