@@ -47,6 +47,9 @@ extern "C" {
 	/* read data structure off the disk */
 	uint64_t qf_deserialize(QF *qf, const char *filename);
 
+	/* mmap the QF from disk. */
+	void qf_read(QF *qf, const char *path);
+
 #ifdef __cplusplus
 }
 #endif
