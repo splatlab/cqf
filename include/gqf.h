@@ -94,14 +94,6 @@ extern "C" {
 		 can release that memory. */
 	void *qf_destroy(QF *qf);
 
-	/* Reset the CQF to an empty filter. */
-	void qf_reset(QF *qf);
-
-	/* The caller should call qf_init on the dest QF using the same
-	 * parameters as the src QF before calling this function. Note: src
-	 * and dest must be exactly the same, including number of slots.  */
-	void qf_copy(QF *dest, const QF *src);
-
 	/* Allocate a new CQF using "nslots" at "buffer" and copy elements from "qf"
 	 * into it. 
 	 * If there is not enough space at buffer then it will return the total size
@@ -304,6 +296,14 @@ extern "C" {
    Miscellaneous convenience functions.
 	*************************************/
 	
+	/* Reset the CQF to an empty filter. */
+	void qf_reset(QF *qf);
+
+	/* The caller should call qf_init on the dest QF using the same
+	 * parameters as the src QF before calling this function. Note: src
+	 * and dest must be exactly the same, including number of slots.  */
+	void qf_copy(QF *dest, const QF *src);
+
 	/* merge two QFs into the third one. */
 	void qf_merge(const QF *qfa, const QF *qfb, QF *qfc);
 
