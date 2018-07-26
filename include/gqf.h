@@ -1,17 +1,8 @@
 /*
  * ============================================================================
  *
- *       Filename:  gqf.h
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2018-03-21 10:43:39 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
- *   Organization:  Stony Brook University
+ *        Authors:  Prashant Pandey <ppandey@cs.stonybrook.edu>
+ *                  Rob Johnson <robj@vmware.com>   
  *
  * ============================================================================
  */
