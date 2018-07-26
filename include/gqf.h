@@ -193,6 +193,10 @@ extern "C" {
 	/* NOT IMPLEMENTED YET. */
 	//void qf_replace(QF *qf, uint64_t key, uint64_t oldvalue, uint64_t newvalue);
 
+	/****************************************
+   Query functions
+	****************************************/
+	
 	/* Lookup the value associated with key.  Returns the count of that
 		 key/value pair in the QF.  If it returns 0, then, the key is not
 		 present in the QF. Only returns the first value associated with key
