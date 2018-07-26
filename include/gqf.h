@@ -249,6 +249,10 @@ extern "C" {
 	 * hash value greater than or equal to "hash". */
 	bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash);
 
+	typedef void (*qfi_next_callback)(QFi *qfi, void *arg);
+	
+	void qfi_set_next_callback(QFi *qfi, qfi_next_callback fn, void *arg);
+	
 #define QF_INVALID (-4)
 	
 	/* Returns 0 if the iterator is still valid (i.e. has not reached the end of
@@ -317,11 +321,10 @@ extern "C" {
 		 all items in the CQF). */
 	uint64_t qf_magnitude(const QF *qf);
 
-	/*
+	/***********************************
 		Debugging functions.
-	*/
+	************************************/
 
-	/* For debugging */
 	void qf_dump(const QF *);
 
 	void qf_dump_metadata(const QF *qf);
