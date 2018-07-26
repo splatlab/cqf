@@ -216,11 +216,11 @@ extern "C" {
 
 	/* Hashing info */
 	enum qf_hashmode qf_get_hashmode(const QF *qf);
-	uint64_t    qf_get_hash_seed(const QF *qf);
-	__uint128_t qf_get_hash_range(const QF *qf);
+	uint64_t         qf_get_hash_seed(const QF *qf);
+	__uint128_t      qf_get_hash_range(const QF *qf);
 
 	/* Space usage info. */
-	bool qf_is_auto_resize_enabled(const QF *qf);
+	bool     qf_is_auto_resize_enabled(const QF *qf);
 	uint64_t qf_get_total_size_in_bytes(const QF *qf);
 	uint64_t qf_get_nslots(const QF *qf);
 	uint64_t qf_get_num_occupied_slots(const QF *qf);
