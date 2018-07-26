@@ -242,17 +242,31 @@ extern "C" {
 	typedef struct quotient_filter_iterator quotient_filter_iterator;
 	typedef quotient_filter_iterator QFi;
 
-	/* Initialize an iterator starting at the given position. */
-	bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position);
+	/* Initialize an iterator starting at the given position.  Valid
+		 locking modes are NO_LOCK and WAIT_FOR_LOCK.  TRY_ONCE_LOCK is
+		 not allowed.  When locking is enabled, the iterator will hold the
+		 lock on the region of the CQF containing the current item for the
+		 entire time that the iterator is pointing to that item.
+	 */
+	int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position, uint8_t flags);
 
-	/* Initialize an iterator and position it at the smallest index containing a
-	 * hash value greater than or equal to "hash". */
-	bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash);
+	/* Initialize an iterator and position it at the smallest index
+	 * containing a key-value pair whose hash is greater than or equal
+	 * to the specified key-value pair. */
+	int64_t qf_iterator_from_key_value(const QF *qf, QFi *qfi, uint64_t key, uint64_t value,
+																		 uint8_t flags);
 
+	/* Set/get the locking mode of the iterator. */
+	void qfi_set_locking_mode(QFi *qfi, uint8_t flags);
+	uint8_t qfi_get_locking_mode(QFi *qfi);
+	
+	/* The iterator supports calling a callback function every time the
+		 user invokes qfi_next.  This callback can do, e.g. prefetching.
+		 This API is primarily for use by extensions to the CQF (e.g. for
+		 mmapped CQFs). */
 	typedef void (*qfi_next_callback)(QFi *qfi, void *arg);
-	
 	void qfi_set_next_callback(QFi *qfi, qfi_next_callback fn, void *arg);
-	
+
 #define QF_INVALID (-4)
 	
 	/* Returns 0 if the iterator is still valid (i.e. has not reached the end of
@@ -269,6 +283,10 @@ extern "C" {
 	int qfi_get_hash(const QFi *qfi, uint64_t *hash, uint64_t *value, uint64_t
 									 *count);
 
+	/* Set the count of the element currently pointed to by the iterator
+		 to the specified newcount. */
+	int qfi_set_count(QFi *qfi, uint64_t newcount);
+	
 	/* Advance to next entry.  Returns whether or not another entry is
 		 found.  */
 	int qfi_next(QFi *qfi);
@@ -276,6 +294,10 @@ extern "C" {
 	/* Check to see if the if the end of the QF */
 	int qfi_end(const QFi *qfi); 
 
+	/* Deallocate any resources and release any locks held by the
+		 iterator, making it unusable. */
+	void qfi_release(QFi *qfi);
+	
 	/********************************************
    Merge iterators
 	********************************************/
@@ -296,6 +318,11 @@ extern "C" {
 	/* Check to see if the if the end of all the iterators */
 	int qfmi_end(const QFmi *qfmi);
 	
+	/* Deallocate any resources and release any locks held by the
+		 iterator, making it unusable. Note that this does not
+		 call release on the underlying CQF iterators. */
+	void qfmi_release(QFi *qfi);
+
 	/************************************
    Miscellaneous convenience functions.
 	*************************************/
@@ -306,20 +333,25 @@ extern "C" {
 	/* The caller should call qf_init on the dest QF using the same
 	 * parameters as the src QF before calling this function. Note: src
 	 * and dest must be exactly the same, including number of slots.  */
-	void qf_copy(QF *dest, const QF *src);
+	void qf_copy(QF *dest, const QF *src, int8_t flags);
 
-	/* merge two QFs into the third one. */
-	void qf_merge(const QF *qfa, const QF *qfb, QF *qfc);
+	/* merge two QFs into the third one. Note: merges with any existing
+		 values in qfc.  */
+	void qf_merge(const QF *qfa, const QF *qfb, QF *qfc,
+								int8_t aflags, int8_t bflags, int8_t cflags);
 
-	/* merge multiple QFs into the final QF one. */
-	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr);
+	/* merge multiple QFs into the final QF one. Note: if flags_arr
+		 is NULL, then it defaults to WAIT_FOR_LOCK.  */
+	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr,
+											const uint8_t flags_arr[], uint8_t rflags);
 
 	/* find cosine similarity between two QFs. */
-	uint64_t qf_inner_product(const QF *qfa, const QF *qfb);
+	uint64_t qf_inner_product(const QF *qfa, const QF *qfb,
+														uint8_t aflags, uint8_t bflags);
 
 	/* square of the L_2 norm of a QF (i.e. sum of squares of counts of
 		 all items in the CQF). */
-	uint64_t qf_magnitude(const QF *qf);
+	uint64_t qf_magnitude(const QF *qf, uint8_t flags);
 
 	/***********************************
 		Debugging functions.
