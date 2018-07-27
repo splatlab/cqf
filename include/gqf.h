@@ -257,7 +257,7 @@ extern "C" {
 																		 uint8_t flags);
 
 	/* Set/get the locking mode of the iterator. */
-	void qfi_set_locking_mode(QFi *qfi, uint8_t flags);
+	void    qfi_set_locking_mode(QFi *qfi, uint8_t flags);
 	uint8_t qfi_get_locking_mode(QFi *qfi);
 	
 	/* The iterator supports calling a callback function every time the
@@ -358,7 +358,6 @@ extern "C" {
 	************************************/
 
 	void qf_dump(const QF *);
-
 	void qf_dump_metadata(const QF *qf);
 
 
