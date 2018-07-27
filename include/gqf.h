@@ -242,11 +242,14 @@ extern "C" {
 	typedef struct quotient_filter_iterator quotient_filter_iterator;
 	typedef quotient_filter_iterator QFi;
 
+#define QF_INVALID (-4)
+	
 	/* Initialize an iterator starting at the given position.  Valid
 		 locking modes are NO_LOCK and WAIT_FOR_LOCK.  TRY_ONCE_LOCK is
 		 not allowed.  When locking is enabled, the iterator will hold the
 		 lock on the region of the CQF containing the current item for the
-		 entire time that the iterator is pointing to that item.
+		 entire time that the iterator is pointing to that item.  If flags
+		 is neither NO_LOCK or WAIT_FOR_LOCK, then returns QF_INVALID.
 	 */
 	int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position, uint8_t flags);
 
@@ -267,8 +270,6 @@ extern "C" {
 	typedef void (*qfi_next_callback)(QFi *qfi, void *arg);
 	void qfi_set_next_callback(QFi *qfi, qfi_next_callback fn, void *arg);
 
-#define QF_INVALID (-4)
-	
 	/* Returns 0 if the iterator is still valid (i.e. has not reached the end of
 	 * the QF. 
 	 * Requires that the hash modeof the CQF is INVERTIBLE or NONE.
