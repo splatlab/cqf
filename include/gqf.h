@@ -250,6 +250,11 @@ extern "C" {
 		 lock on the region of the CQF containing the current item for the
 		 entire time that the iterator is pointing to that item.  If flags
 		 is neither NO_LOCK or WAIT_FOR_LOCK, then returns QF_INVALID.
+
+		 Note: when the iterator is in NO_LOCK mode, it still acquires
+		 locks when it accesses the CQF, so concurrent updates to the CQF
+		 are safe.  However, in this mode, the iterator may return stale
+		 results in the presence of concurrent updates.
 	 */
 	int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position, uint8_t flags);
 
