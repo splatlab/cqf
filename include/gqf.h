@@ -165,16 +165,15 @@ extern "C" {
 	int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, uint8_t flags);
 
 	/* Remove all instances of this key. */
-	/* NOT IMPLEMENTED YET. */
-	//void qf_delete_key(QF *qf, uint64_t key);
+	void qf_delete_key(QF *qf, uint64_t key);
 
 	/* Replace the association (key, oldvalue, count) with the association
 		 (key, newvalue, count). If there is already an association (key,
 		 newvalue, count'), then the two associations will be merged and
 		 their counters will be summed, resulting in association (key,
 		 newvalue, count' + count). */
-	/* NOT IMPLEMENTED YET. */
-	//void qf_replace(QF *qf, uint64_t key, uint64_t oldvalue, uint64_t newvalue);
+	/* NOT IMPLEMENTED */
+	/* void qf_replace(QF *qf, uint64_t key, uint64_t oldvalue, uint64_t newvalue); */
 
 	/****************************************
    Query functions
@@ -243,6 +242,9 @@ extern "C" {
 	typedef quotient_filter_iterator QFi;
 
 #define QF_INVALID (-4)
+
+#define QFI_BEGIN (0ULL)
+#define QFI_END ((uint64_t)(-1))
 	
 	/* Initialize an iterator starting at the given position.  Valid
 		 locking modes are NO_LOCK and WAIT_FOR_LOCK.  TRY_ONCE_LOCK is
@@ -289,16 +291,20 @@ extern "C" {
 	int qfi_get_hash(const QFi *qfi, uint64_t *hash, uint64_t *value, uint64_t
 									 *count);
 
+	uint64_t qfi_get_position(const QFi *qfi);
+	
 	/* Set the count of the element currently pointed to by the iterator
 		 to the specified newcount. */
 	int qfi_set_count(QFi *qfi, uint64_t newcount);
-	
+
 	/* Advance to next entry.  Returns whether or not another entry is
 		 found.  */
-	int qfi_next(QFi *qfi);
-
+	int qfi_step(QFi *qfi, int64_t steps);
+	int qfi_jump_to_position(QFi *qfi, uint64_t new_position);
+	int qfi_jump_to_key_value(QFi *qfi, uint64_t key, uint64_t value);
+	
 	/* Check to see if the if the end of the QF */
-	int qfi_end(const QFi *qfi); 
+	int qfi_compare(const QFi *qfia, const QFi *qfib); 
 
 	/* Deallocate any resources and release any locks held by the
 		 iterator, making it unusable. */
