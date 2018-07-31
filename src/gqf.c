@@ -46,6 +46,7 @@
 #define GET_WAIT_FOR_LOCK(flag) (flag & QF_WAIT_FOR_LOCK)
 #define GET_KEY_HASH(flag) (flag & QF_KEY_IS_HASH)
 
+#define DISTANCE_FROM_HOME_SLOT_CUTOFF 1000
 #define BILLION 1000000000L
 
 #ifdef DEBUG
@@ -1917,6 +1918,16 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 	else
 		ret = insert(qf, hash, count, flags);
 
+	// check for fullness based on the distance from the home slot to the slot
+	// in which the key is inserted
+	if (ret > DISTANCE_FROM_HOME_SLOT_CUTOFF) {
+		if (qf->metadata->auto_resize) {
+			fprintf(stdout, "Resizing the CQF.\n");
+			qf_resize_malloc(qf, qf->metadata->nslots * 2);
+		} else {
+			fprintf(stderr, "The CQF is filling up.\n");
+		}
+	}
 	return ret;
 }
 
