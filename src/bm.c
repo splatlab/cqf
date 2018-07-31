@@ -1,20 +1,10 @@
 /*
- * =====================================================================================
+ * ============================================================================
  *
- *       Filename:  bm.c
+ *        Authors:  Prashant Pandey <ppandey@cs.stonybrook.edu>
+ *                  Rob Johnson <robj@vmware.com>   
  *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  05/18/2015 08:54:53 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Prashant Pandey (ppandey@cs.stonybrook.edu),
- *                  Rob Johnson (rob@cs.stonybrook.edu)
- *   Organization:  
- *
- * =====================================================================================
+ * ============================================================================
  */
 
 #include <time.h>
