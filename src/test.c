@@ -1,18 +1,8 @@
 /*
  * ============================================================================
  *
- *       Filename:  main.c
- *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  2017-02-04 03:40:58 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Prashant Pandey (ppandey@cs.stonybrook.edu)
- *                  Rob Johnson (rob@cs.stonybrook.edu)
- *   Organization:  Stony Brook University
+ *        Authors:  Prashant Pandey <ppandey@cs.stonybrook.edu>
+ *                  Rob Johnson <robj@vmware.com>   
  *
  * ============================================================================
  */
@@ -47,12 +37,12 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	if (!qf_malloc(&qf, nslots, nhashbits, 0, INVERTIBLE, 0)) {
+	if (!qf_malloc(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
 
-	qf_set_auto_resize(&qf);
+	qf_set_auto_resize(&qf, true);
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
@@ -63,15 +53,13 @@ int main(int argc, char **argv)
 
 	/* Insert keys in the CQF */
 	for (uint64_t i = 0; i < nvals; i++) {
-		int ret = qf_insert(&qf, vals[i], 0, key_count, NO_LOCK);
+		int ret = qf_insert(&qf, vals[i], 0, key_count, QF_NO_LOCK);
 		if (ret < 0) {
 			fprintf(stderr, "failed insertion for key: %lx %d.\n", vals[i], 50);
-			if (ret == -1)
+			if (ret == QF_NO_SPACE)
 				fprintf(stderr, "CQF is full.\n");
-			else if (ret == -2)
+			else if (ret == QF_COULDNT_LOCK)
 				fprintf(stderr, "TRY_ONCE_LOCK failed.\n");
-			else if (ret == -3)
-				fprintf(stderr, "Runtime lock does not satisfy the init time lock.\n");
 			else
 				fprintf(stderr, "Does not recognise return value.\n");
 			abort();
@@ -115,9 +103,9 @@ int main(int argc, char **argv)
 	fprintf(stdout, "Testing iterator and unique indexes.\n");
 	/* Initialize an iterator and validate counts. */
 	QFi qfi;
-	qf_iterator(&qf, &qfi, 0);
+	qf_iterator_from_position(&qf, &qfi, 0);
 	QF unique_idx;
-	if (!qf_malloc(&unique_idx, nslots, nhashbits, 0, INVERTIBLE, 0)) {
+	if (!qf_malloc(&unique_idx, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate set.\n");
 		abort();
 	}
@@ -131,12 +119,17 @@ int main(int argc, char **argv)
 			abort();
 		}
 		int64_t idx = qf_get_unique_index(&qf, key, value, 0);
+		if (idx == QF_DOESNT_EXIST) {
+			fprintf(stderr, "Failed lookup for unique index for: %lx. index: %ld\n",
+							key, idx);
+			abort();
+		}
 		if (qf_count_key_value(&unique_idx, idx, 0, 0) > 0) {
 			fprintf(stderr, "Failed unique index for: %lx. index: %ld\n",
 							key, idx);
 			abort();
 		} else {
-			qf_insert(&unique_idx, idx, 0, 1, NO_LOCK);
+			qf_insert(&unique_idx, idx, 0, 1, QF_NO_LOCK);
 		}
 	} while(!qfi_end(&qfi));
 
@@ -145,7 +138,7 @@ int main(int argc, char **argv)
 	srand(time(NULL));
 	for (uint64_t i = 0; i < 100; i++) {
 		uint64_t idx = rand()%nvals;
-		int ret = qf_delete_key_value(&file_qf, vals[idx], 0, NO_LOCK);
+		int ret = qf_delete_key_value(&file_qf, vals[idx], 0, QF_NO_LOCK);
 		uint64_t count = qf_count_key_value(&file_qf, vals[idx], 0, 0);
 		if (count > 0) {
 			if (ret < 0) {

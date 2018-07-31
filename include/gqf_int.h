@@ -1,3 +1,12 @@
+/*
+ * ============================================================================
+ *
+ *        Authors:  Prashant Pandey <ppandey@cs.stonybrook.edu>
+ *                  Rob Johnson <robj@vmware.com>   
+ *
+ * ============================================================================
+ */
+
 #ifndef _GQF_INT_H_
 #define _GQF_INT_H_
 
@@ -95,7 +104,7 @@ extern "C" {
 
 	typedef quotient_filter_metadata qfmetadata;
 
-	typedef struct quotient_filter_s {
+	typedef struct quotient_filter {
 		qfruntime *runtimedata;
 		qfmetadata *metadata;
 		qfblock *blocks;
@@ -110,7 +119,7 @@ extern "C" {
 		uint16_t length;
 	} cluster_data;
 
-	typedef struct quotient_filter_iterator_s {
+	typedef struct quotient_filter_iterator {
 		const QF *qf;
 		uint64_t run;
 		uint64_t current;

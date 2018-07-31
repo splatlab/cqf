@@ -1,20 +1,10 @@
 /*
- * =====================================================================================
+ * ============================================================================
  *
- *       Filename:  test_thresdsafe.cc
+ *        Authors:  Prashant Pandey <ppandey@cs.stonybrook.edu>
+ *                  Rob Johnson <robj@vmware.com>   
  *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  07/19/2018 11:13:54 AM
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Prashant Pandey (), ppandey@cs.stonybrook.edu
- *                  Rob Johnson (rob@cs.stonybrook.edu)
- *   Organization:  Stony Brook University
- *
- * =====================================================================================
+ * ============================================================================
  */
 
 #include <stdio.h>
@@ -43,7 +33,7 @@ void *insert_bm(void *arg)
 {
 	insert_args *a = (insert_args *)arg;
 	for (uint32_t i = a->start; i <= a->end; i++) {
-		int ret = qf_insert(a->cf, a->vals[i], 0, a->freq, WAIT_FOR_LOCK);
+		int ret = qf_insert(a->cf, a->vals[i], 0, a->freq, QF_WAIT_FOR_LOCK);
 		if (ret < 0) {
 			fprintf(stderr, "failed insertion for key: %lx %d.\n", a->vals[i],
 							a->freq);
@@ -102,7 +92,7 @@ int main(int argc, char **argv)
 	uint64_t *vals;
 	
 	/* Initialise the CQF */
-	if (!qf_malloc(&cfr, nslots, nhashbits, 0, INVERTIBLE, 0)) {
+	if (!qf_malloc(&cfr, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
@@ -139,7 +129,7 @@ int main(int argc, char **argv)
 
 	QFi cfir;
 	/* Initialize an iterator */
-	qf_iterator(&cfr, &cfir, 0);
+	qf_iterator_from_position(&cfr, &cfir, 0);
 	do {
 		uint64_t key, value, count;
 		qfi_get_key(&cfir, &key, &value, &count);

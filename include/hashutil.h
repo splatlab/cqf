@@ -1,20 +1,10 @@
 /*
- * =====================================================================================
+ * ============================================================================
  *
- *       Filename:  hashutil.h
+ *        Authors:  Prashant Pandey <ppandey@cs.stonybrook.edu>
+ *                  Rob Johnson <robj@vmware.com>   
  *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  04/18/2016 04:49:32 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Prashant Pandey (ppandey@cs.stonybrook.edu)
- *                  Rob Johnson (rob@cs.stonybrook.edu)
- *   Organization:  Stony Brook University
- *
- * =====================================================================================
+ * ============================================================================
  */
 
 #ifndef _HASHUTIL_H_

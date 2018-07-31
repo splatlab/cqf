@@ -1,19 +1,10 @@
 /*
- * =====================================================================================
+ * ============================================================================
  *
- *       Filename:  qf_wrapper.h
+ *        Authors:  Prashant Pandey <ppandey@cs.stonybrook.edu>
+ *                  Rob Johnson <robj@vmware.com>   
  *
- *    Description:  
- *
- *        Version:  1.0
- *        Created:  10/28/2015 04:48:55 PM
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Prashant Pandey (ppandey@cs.stonybrook.edu), 
- *   Organization:  
- *
- * =====================================================================================
+ * ============================================================================
  */
 
 #ifndef GQF_WRAPPER_H
@@ -29,13 +20,13 @@ QFi g_quotient_filter_itr;
 extern inline int gqf_init(uint64_t nbits, uint64_t num_hash_bits)
 {
 	uint64_t nslots = 1 << nbits;
-	qf_malloc(&g_quotient_filter, nslots, num_hash_bits, 0, NONE, 0);
+	qf_malloc(&g_quotient_filter, nslots, num_hash_bits, 0, QF_HASH_NONE, 0);
 	return 0;
 }
 
 extern inline int gqf_insert(__uint128_t val, uint64_t count)
 {
-	qf_insert(&g_quotient_filter, val, 0, count, NO_LOCK);
+	qf_insert(&g_quotient_filter, val, 0, count, QF_NO_LOCK);
 	return 0;
 }
 
@@ -57,7 +48,7 @@ extern inline int gqf_destroy()
 
 extern inline int gqf_iterator(uint64_t pos)
 {
-	qf_iterator(&g_quotient_filter, &g_quotient_filter_itr, pos);
+	qf_iterator_from_position(&g_quotient_filter, &g_quotient_filter_itr, pos);
 	return 0;
 }
 
