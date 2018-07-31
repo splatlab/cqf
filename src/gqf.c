@@ -2102,6 +2102,51 @@ int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value,
 	return QF_DOESNT_EXIST;
 }
 
+enum qf_hashmode qf_get_hashmode(const QF *qf) {
+	return qf->metadata->hash_mode;
+}
+uint64_t         qf_get_hash_seed(const QF *qf) {
+	return qf->metadata->seed;
+}
+__uint128_t      qf_get_hash_range(const QF *qf) {
+	return qf->metadata->range;
+}
+
+bool     qf_is_auto_resize_enabled(const QF *qf) {
+	if (qf->metadata->auto_resize == 1)
+		return true;
+	return false;
+}
+uint64_t qf_get_total_size_in_bytes(const QF *qf) {
+	return qf->metadata->total_size_in_bytes;
+}
+uint64_t qf_get_nslots(const QF *qf) {
+	return qf->metadata->nslots;
+}
+uint64_t qf_get_num_occupied_slots(const QF *qf) {
+	return qf->metadata->noccupied_slots;
+}
+
+uint64_t qf_get_num_key_bits(const QF *qf) {
+	return qf->metadata->key_bits;
+}
+uint64_t qf_get_num_value_bits(const QF *qf) {
+	return qf->metadata->value_bits;
+}
+uint64_t qf_get_num_key_remainder_bits(const QF *qf) {
+	return qf->metadata->key_remainder_bits;
+}
+uint64_t qf_get_bits_per_slot(const QF *qf) {
+	return qf->metadata->bits_per_slot;
+}
+
+uint64_t qf_get_sum_of_counts(const QF *qf) {
+	return qf->metadata->nelts;
+}
+uint64_t qf_get_num_distinct_key_value_pairs(const QF *qf) {
+	return qf->metadata->ndistinct_elts;
+}
+
 /* initialize the iterator at the run corresponding
  * to the position index
  */
