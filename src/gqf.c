@@ -1902,7 +1902,7 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 {
 	// We fill up the CQF up to 95% load factor.
 	// This is a very conservative check.
-	if (qf->metadata->noccupied_slots >= qf->metadata->xnslots * 0.95) {
+	if (qf->metadata->noccupied_slots >= qf->metadata->nslots * 0.95) {
 		if (qf->metadata->auto_resize) {
 			fprintf(stdout, "Resizing the CQF.\n");
 			qf_resize_malloc(qf, qf->metadata->nslots * 2);
