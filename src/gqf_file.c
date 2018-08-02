@@ -56,6 +56,10 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 	qf->metadata = (qfmetadata *)mmap(NULL, total_num_bytes, PROT_READ |
 																		PROT_WRITE, MAP_SHARED,
 																		qf->runtimedata->f_info.fd, 0);
+	if (qf->metadata == MAP_FAILED) {
+		perror("Couldn't mmap metadata.");
+		exit(EXIT_FAILURE);
+	}
 	ret = madvise(qf->metadata, total_num_bytes, MADV_RANDOM);
 	if (ret < 0) {
 		perror("Couldn't fallocate file.");
@@ -66,6 +70,10 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 	uint64_t init_size = qf_init(qf, nslots, key_bits, value_bits, hash, seed,
 															 qf->metadata, total_num_bytes);
 	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	if (qf->runtimedata->f_info.filepath == NULL) {
+		perror("Couldn't allocate memory for runtime f_info filepath.");
+		exit(EXIT_FAILURE);
+	}
 	strcpy(qf->runtimedata->f_info.filepath, filename);
 
 	if (init_size == total_num_bytes)
@@ -80,6 +88,10 @@ uint64_t qf_usefile(QF* qf, const char* filename)
 	int ret;
 
 	qf->runtimedata = (qfruntime *)calloc(sizeof(qfruntime), 1);
+	if (qf->runtimedata == NULL) {
+		perror("Couldn't allocate memory for runtime data.");
+		exit(EXIT_FAILURE);
+	}
 	qf->runtimedata->f_info.fd = open(filename, O_RDWR, S_IRWXU);
 	if (qf->runtimedata->f_info.fd < 0) {
 		perror("Couldn't open file.");
@@ -98,17 +110,33 @@ uint64_t qf_usefile(QF* qf, const char* filename)
 	}
 
 	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	if (qf->runtimedata->f_info.filepath == NULL) {
+		perror("Couldn't allocate memory for runtime f_info filepath.");
+		exit(EXIT_FAILURE);
+	}
 	strcpy(qf->runtimedata->f_info.filepath, filename);
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
 																					sizeof(volatile int));
+	if (qf->runtimedata->locks == NULL) {
+		perror("Couldn't allocate memory for runtime locks.");
+		exit(EXIT_FAILURE);
+	}
 #ifdef LOG_WAIT_TIME
 	qf->runtimedata->wait_times = (wait_time_data* )calloc(qf->runtimedata->num_locks+1,
 																								 sizeof(wait_time_data));
+	if (qf->runtimedata->wait_times == NULL) {
+		perror("Couldn't allocate memory for runtime wait_times.");
+		exit(EXIT_FAILURE);
+	}
 #endif
 	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
 																		MAP_SHARED, qf->runtimedata->f_info.fd, 0);
+	if (qf->metadata == MAP_FAILED) {
+		perror("Couldn't mmap metadata.");
+		exit(EXIT_FAILURE);
+	}
 	if (qf->metadata->magic_endian_number != MAGIC_NUMBER) {
 		fprintf(stderr, "Can't read the CQF. It was written on a different endian machine.");
 		exit(EXIT_FAILURE);
@@ -137,6 +165,10 @@ bool qf_deletefile(QF* qf)
 {
 	assert(qf->metadata != NULL);
 	char *path = (char *)malloc(strlen(qf->runtimedata->f_info.filepath));
+	if (qf->runtimedata->f_info.filepath == NULL) {
+		perror("Couldn't allocate memory for runtime f_info filepath.");
+		exit(EXIT_FAILURE);
+	}
 	strcpy(path, qf->runtimedata->f_info.filepath);
 	if (qf_closefile(qf)) {
 		remove(path);
@@ -176,6 +208,10 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 		exit(EXIT_FAILURE);
 	}
 	qf->metadata = (qfmetadata *)calloc(sizeof(qfmetadata), 1);
+	if (qf->metadata == NULL) {
+		perror("Couldn't allocate memory for metadata.");
+		exit(EXIT_FAILURE);
+	}
 	int ret = fread(qf->metadata, sizeof(qfmetadata), 1, fin);
 	if (ret < 1) {
 		perror("Couldn't read metadata from file.");
@@ -187,6 +223,10 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 	}
 
 	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	if (qf->runtimedata->f_info.filepath == NULL) {
+		perror("Couldn't allocate memory for runtime f_info filepath.");
+		exit(EXIT_FAILURE);
+	}
 	strcpy(qf->runtimedata->f_info.filepath, filename);
 	/* initlialize the locks in the QF */
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
@@ -194,7 +234,15 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 	/* initialize all the locks to 0 */
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
 																									sizeof(volatile int));
+	if (qf->runtimedata->locks == NULL) {
+		perror("Couldn't allocate memory for runtime locks.");
+		exit(EXIT_FAILURE);
+	}
 	qf->blocks = (qfblock *)calloc(qf->metadata->total_size_in_bytes, 1);
+	if (qf->blocks == NULL) {
+		perror("Couldn't allocate memory for blocks.");
+		exit(EXIT_FAILURE);
+	}
 	ret = fread(qf->blocks, qf->metadata->total_size_in_bytes, 1, fin);
 	if (ret < 1) {
 		perror("Couldn't read metadata from file.");
