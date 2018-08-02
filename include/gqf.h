@@ -244,36 +244,51 @@ extern "C" {
 	typedef quotient_filter_iterator QFi;
 
 #define QF_INVALID (-4)
+#define QFI_INVALID (-5)
 	
-	/* Initialize an iterator starting at the given position. */
+	/* Initialize an iterator starting at the given position.
+	 * Return value:
+	 *  >= 0: iterator is initialized and positioned at the returned slot.
+	 *   = QFI_INVALID: iterator has reached end.
+	 */
 	int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position);
 
 	/* Initialize an iterator and position it at the smallest index
 	 * containing a key-value pair whose hash is greater than or equal
-	 * to the specified key-value pair. */
+	 * to the specified key-value pair.
+	 * Return value:
+	 *  >= 0: iterator is initialized and position at the returned slot.
+	 *   = QFI_INVALID: iterator has reached end.
+	 */
 	int64_t qf_iterator_from_key_value(const QF *qf, QFi *qfi, uint64_t key,
 																		 uint64_t value, uint8_t flags);
 
-	/* Returns 0 if the iterator is still valid (i.e. has not reached the end of
-	 * the QF. 
-	 * Requires that the hash modeof the CQF is INVERTIBLE or NONE.
+	/* Requires that the hash mode of the CQF is INVERTIBLE or NONE.
 	 * If the hash mode is DEFAULT then returns QF_INVALID.
+	 * Return value:
+	 *   = 0: Iterator is still valid.
+	 *   = QFI_INVALID: iterator has reached end.
+	 *   = QF_INVALID: hash mode is QF_DEFAULT_HASH
 	 */
 	int qfi_get_key(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
 									*count);
 
-	/* Returns 0 if the iterator is still valid (i.e. has not reached the end of
-	 * the QF. 
+	/* Return value:
+	 *   = 0: Iterator is still valid.
+	 *   = QFI_INVALID: iterator has reached end.
 	 */
 	int qfi_get_hash(const QFi *qfi, uint64_t *hash, uint64_t *value, uint64_t
 									 *count);
 
-	/* Advance to next entry.  Returns whether or not another entry is
-		 found.  */
+	/* Advance to next entry.
+	 * Return value:
+	 *   = 0: Iterator is still valid.
+	 *   = QFI_INVALID: iterator has reached end.
+	 */
 	int qfi_next(QFi *qfi);
 
 	/* Check to see if the if the end of the QF */
-	int qfi_end(const QFi *qfi); 
+	bool qfi_end(const QFi *qfi);
 
 	/************************************
    Miscellaneous convenience functions.

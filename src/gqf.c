@@ -1701,10 +1701,18 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->runtimedata->metadata_lock = 0;
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
 																					sizeof(volatile int));
+	if (qf->runtimedata->locks == NULL) {
+		perror("Couldn't allocate memory for runtime locks.");
+		exit(EXIT_FAILURE);
+	}
 #ifdef LOG_WAIT_TIME
 	qf->runtimedata->wait_times = (wait_time_data*
 																 )calloc(qf->runtimedata->num_locks+1,
 																				 sizeof(wait_time_data));
+	if (qf->runtimedata->wait_times == NULL) {
+		perror("Couldn't allocate memory for runtime wait_times.");
+		exit(EXIT_FAILURE);
+	}
 #endif
 
 	return total_num_bytes;
@@ -1719,14 +1727,26 @@ uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len)
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
 	qf->runtimedata = (qfruntime *)calloc(sizeof(qfruntime), 1);
+	if (qf->runtimedata == NULL) {
+		perror("Couldn't allocate memory for runtime data.");
+		exit(EXIT_FAILURE);
+	}
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
 																					sizeof(volatile int));
+	if (qf->runtimedata->locks == NULL) {
+		perror("Couldn't allocate memory for runtime locks.");
+		exit(EXIT_FAILURE);
+	}
 #ifdef LOG_WAIT_TIME
 	qf->runtimedata->wait_times = (wait_time_data*
 																 )calloc(qf->runtimedata->num_locks+1,
 																				 sizeof(wait_time_data));
+	if (qf->runtimedata->wait_times == NULL) {
+		perror("Couldn't allocate memory for runtime wait_times.");
+		exit(EXIT_FAILURE);
+	}
 #endif
 
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
@@ -2106,14 +2126,14 @@ int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value,
 enum qf_hashmode qf_get_hashmode(const QF *qf) {
 	return qf->metadata->hash_mode;
 }
-uint64_t         qf_get_hash_seed(const QF *qf) {
+uint64_t qf_get_hash_seed(const QF *qf) {
 	return qf->metadata->seed;
 }
-__uint128_t      qf_get_hash_range(const QF *qf) {
+__uint128_t qf_get_hash_range(const QF *qf) {
 	return qf->metadata->range;
 }
 
-bool     qf_is_auto_resize_enabled(const QF *qf) {
+bool qf_is_auto_resize_enabled(const QF *qf) {
 	if (qf->metadata->auto_resize == 1)
 		return true;
 	return false;
@@ -2156,7 +2176,7 @@ int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position)
 	if (position == 0xffffffffffffffff) {
 		qfi->current = 0xffffffffffffffff;
 		qfi->qf = qf;
-		return QF_INVALID;
+		return QFI_INVALID;
 	}
 	assert(position < qf->metadata->nslots);
 	if (!is_occupied(qf, position)) {
@@ -2181,12 +2201,16 @@ int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position)
 #ifdef LOG_CLUSTER_LENGTH
 	qfi->c_info = (cluster_data* )calloc(qf->metadata->nslots/32,
 																			 sizeof(cluster_data));
+	if (qfi->c_info == NULL) {
+		perror("Couldn't allocate memory for c_info.");
+		exit(EXIT_FAILURE);
+	}
 	qfi->cur_start_index = position;
 	qfi->cur_length = 1;
 #endif
 
 	if (qfi->current >= qf->metadata->nslots)
-		return QF_INVALID;
+		return QFI_INVALID;
 	return qfi->current;
 }
 
@@ -2196,7 +2220,7 @@ int64_t qf_iterator_key_value(const QF *qf, QFi *qfi, uint64_t key, uint64_t
 	if (key >= qf->metadata->range) {
 		qfi->current = 0xffffffffffffffff;
 		qfi->qf = qf;
-		return QF_INVALID;
+		return QFI_INVALID;
 	}
 
 	qfi->qf = qf;
@@ -2262,14 +2286,15 @@ int64_t qf_iterator_key_value(const QF *qf, QFi *qfi, uint64_t key, uint64_t
 	}
 
 	if (qfi->current >= qf->metadata->nslots)
-		return QF_INVALID;
+		return QFI_INVALID;
 	return qfi->current;
 }
 
 static int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
 									 *count)
 {
-	assert(qfi->current < qfi->qf->metadata->nslots);
+	if (qfi_end(qfi))
+		return QFI_INVALID;
 
 	uint64_t current_remainder, current_count;
 	decode_counter(qfi->qf, qfi->current, &current_remainder, &current_count);
@@ -2277,7 +2302,7 @@ static int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
 	*value = current_remainder & BITMASK(qfi->qf->metadata->value_bits);
 	current_remainder = current_remainder >> qfi->qf->metadata->value_bits;
 	*key = (qfi->run << qfi->qf->metadata->key_remainder_bits) | current_remainder;
-	*count = current_count; 
+	*count = current_count;
 
 	return 0;
 }
@@ -2285,29 +2310,30 @@ static int qfi_get(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
 int qfi_get_key(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
 								*count)
 {
-	qfi_get(qfi, key, value, count);
-	if (qfi->qf->metadata->hash_mode == QF_HASH_INVERTIBLE)
-		*key = hash_64i(*key, BITMASK(qfi->qf->metadata->key_bits));
-	else if (qfi->qf->metadata->hash_mode == QF_HASH_DEFAULT) {
-		*key = 0; *value = 0; *count = 0;
-		return -1;
+	*key = *value = *count = 0;
+	int ret = qfi_get(qfi, key, value, count);
+	if (ret == 0) {
+		if (qfi->qf->metadata->hash_mode == QF_HASH_DEFAULT) {
+			*key = 0; *value = 0; *count = 0;
+			return QF_INVALID;
+		} else if (qfi->qf->metadata->hash_mode == QF_HASH_INVERTIBLE)
+			*key = hash_64i(*key, BITMASK(qfi->qf->metadata->key_bits));
 	}
 
-	return 0;
+	return ret;
 }
 
 int qfi_get_hash(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
 								 *count)
 {
-	qfi_get(qfi, key, value, count);
-
-	return 0;
+	*key = *value = *count = 0;
+	return qfi_get(qfi, key, value, count);
 }
 
 int qfi_next(QFi *qfi)
 {
 	if (qfi_end(qfi))
-		return 1;
+		return QFI_INVALID;
 	else {
 		/* move to the end of the current counter*/
 		uint64_t current_remainder, current_count;
@@ -2319,11 +2345,10 @@ int qfi_next(QFi *qfi)
 #ifdef LOG_CLUSTER_LENGTH
 			qfi->cur_length++;
 #endif
-			if (qfi->current > qfi->qf->metadata->nslots)
-				return 1;
+			if (qfi_end(qfi))
+				return QFI_INVALID;
 			return 0;
-		}
-		else {
+		} else {
 #ifdef LOG_CLUSTER_LENGTH
 			/* save to check if the new current is the new cluster. */
 			uint64_t old_current = qfi->current;
@@ -2345,7 +2370,7 @@ int qfi_next(QFi *qfi)
 			if (block_index == qfi->qf->metadata->nblocks) {
 				/* set the index values to max. */
 				qfi->run = qfi->current = qfi->qf->metadata->xnslots;
-				return 1;
+				return QFI_INVALID;
 			}
 			qfi->run = block_index * QF_SLOTS_PER_BLOCK + next_run;
 			qfi->current++;
@@ -2369,12 +2394,11 @@ int qfi_next(QFi *qfi)
 	}
 }
 
-int qfi_end(const QFi *qfi)
+bool qfi_end(const QFi *qfi)
 {
 	if (qfi->current >= qfi->qf->metadata->xnslots /*&& is_runend(qfi->qf, qfi->current)*/)
-		return 1;
-	else
-		return 0;
+		return true;
+	return false;
 }
 
 /*
