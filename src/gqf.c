@@ -1940,16 +1940,22 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 
 	// check for fullness based on the distance from the home slot to the slot
 	// in which the key is inserted
-if (ret == QF_NO_SPACE || ret > DISTANCE_FROM_HOME_SLOT_CUTOFF) {
+	if (ret == QF_NO_SPACE || ret > DISTANCE_FROM_HOME_SLOT_CUTOFF) {
+		float load_factor = qf->metadata->noccupied_slots /
+			(float)qf->metadata->nslots;
+		fprintf(stdout, "Load factor: %lf\n", load_factor);
 		if (qf->metadata->auto_resize) {
-			if (ret == QF_NO_SPACE) {
-				fprintf(stdout, "Resizing the CQF.\n");
-				if (qf_resize_malloc(qf, qf->metadata->nslots * 2) > 0) {
+			fprintf(stdout, "Resizing the CQF.\n");
+			if (qf_resize_malloc(qf, qf->metadata->nslots * 2) > 0) {
+				if (ret == QF_NO_SPACE) {
 					if (count == 1)
 						ret = insert1(qf, hash, flags);
 					else
 						ret = insert(qf, hash, count, flags);
 				}
+			} else {
+				fprintf(stderr, "Resize failed\n");
+				ret = QF_NO_SPACE;
 			}
 		} else
 			fprintf(stderr, "The CQF is filling up.\n");
