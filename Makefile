@@ -20,6 +20,7 @@ endif
 
 LOC_INCLUDE=include
 LOC_SRC=src
+LOC_TEST=test
 OBJDIR=obj
 
 CC = gcc -std=gnu11
@@ -75,6 +76,9 @@ $(OBJDIR)/%.o: $(LOC_SRC)/%.cc | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
 $(OBJDIR)/%.o: $(LOC_SRC)/%.c | $(OBJDIR)
+	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
+
+$(OBJDIR)/%.o: $(LOC_TEST)/%.c | $(OBJDIR)
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
 $(OBJDIR):
