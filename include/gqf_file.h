@@ -29,12 +29,12 @@
 extern "C" {
 #endif
 
-	/* Initialize a file-backed CQF at "filename". */
+	/* Initialize a file-backed (i.e. mmapped) CQF at "filename". */
 	bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 									value_bits, enum qf_hashmode hash, uint32_t seed, char*
 									filename);
 
-	/* Read "filename" into "qf". */
+	/* mmap "filename" into "qf". */
 	uint64_t qf_usefile(QF* qf, const char* filename);
 
 	bool qf_closefile(QF* qf);
@@ -46,9 +46,6 @@ extern "C" {
 
 	/* read data structure off the disk */
 	uint64_t qf_deserialize(QF *qf, const char *filename);
-
-	/* mmap the QF from disk. */
-	void qf_read(QF *qf, const char *path);
 
 #ifdef __cplusplus
 }
