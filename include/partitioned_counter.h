@@ -20,15 +20,20 @@ extern "C" {
 #define MAX_NUM_COUNTERS 32
 
 typedef struct partitioned_counter {
-	uint64_t *local_counters;
+	int64_t *local_counters;
+	int64_t *global_counter;
+	uint32_t num_counters;
+	uint32_t threshold;
 } partitioned_counter;
 
-int pc_init(uint64_t *global_counter, uint32_t num_counters, uint32_t
-						 thresholds);
+typedef struct partitioned_counter pc_t;
 
-int pc_add(int64_t count);
+int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
+						uint32_t threshold);
 
-int pc_sync(void);
+void pc_add(pc_t *pc, int64_t count);
+
+void pc_sync(pc_t *pc);
 
 #ifdef __cplusplus
 }
