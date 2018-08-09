@@ -23,6 +23,13 @@ typedef struct partitioned_counter {
 	uint64_t *local_counters;
 } partitioned_counter;
 
+int pc_init(uint64_t *global_counter, uint32_t num_counters, uint32_t
+						 thresholds);
+
+int pc_add(int64_t count);
+
+int pc_sync(void);
+
 #ifdef __cplusplus
 }
 #endif
