@@ -23,6 +23,13 @@
 
 int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
 						int32_t threshold) {
+	int num_cpus = (int)sysconf( _SC_NPROCESSORS_ONLN );
+	if (num_cpus < 0) {
+		perror( "sysconf" );
+		return PC_ERROR;
+	}
+	num_counters = num_counters == 0 ? num_cpus : min(num_cpus, num_counters);
+	
 	pc->local_counters = (int64_t *)calloc(num_counters,
 																				 sizeof(*pc->local_counters));
 	if (pc->local_counters == NULL) {
@@ -31,16 +38,18 @@ int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
 	}
 	pc->global_counter = global_counter;
 	pc->threshold = threshold;
-	int num_cpus = (int)sysconf( _SC_NPROCESSORS_ONLN );
-	if (num_cpus < 0) {
-		perror( "sysconf" );
-		return PC_ERROR;
-	}
-	num_cpus = num_counters == 0 ? num_cpus : min(num_cpus, num_counters);
-
+	
 	return 0;
 }
 
+void pc_destructor(pc_t *pc)
+{
+	pc_sync(pc);
+	int64_t *lc = pc->local_counters;
+	pc->local_counters = NULL;
+	free(lc);
+}
+	
 void pc_add(pc_t *pc, int64_t count) {
 	int cpuid = sched_getcpu();
 	uint32_t counter_id = cpuid % pc->num_counters;
@@ -55,9 +64,8 @@ void pc_add(pc_t *pc, int64_t count) {
 
 void pc_sync(pc_t *pc) {
 	for (uint32_t i = 0; i < pc->num_counters; i++) {
-		__atomic_fetch_add(pc->global_counter, pc->local_counters[i],
-											 __ATOMIC_SEQ_CST);
-		__atomic_exchange_n(&pc->local_counters[i], 0, __ATOMIC_SEQ_CST);
+		int64_t c = __atomic_exchange_n(&pc->local_counters[i], 0, __ATOMIC_SEQ_CST);
+		__atomic_fetch_add(pc->global_counter, c, __ATOMIC_SEQ_CST);
 	}
 }
 
