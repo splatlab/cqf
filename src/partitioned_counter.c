@@ -28,9 +28,9 @@ int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
 		perror( "sysconf" );
 		return PC_ERROR;
 	}
-	num_counters = num_counters == 0 ? num_cpus : min(num_cpus, num_counters);
+	pc->num_counters = num_counters == 0 ? num_cpus : min(num_cpus, num_counters);
 	
-	pc->local_counters = (int64_t *)calloc(num_counters,
+	pc->local_counters = (int64_t *)calloc(pc->num_counters,
 																				 sizeof(*pc->local_counters));
 	if (pc->local_counters == NULL) {
 		perror("Couldn't allocate memory for local counters.");
