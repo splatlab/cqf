@@ -1,4 +1,4 @@
-TARGETS=test test_threadsafe bm
+TARGETS=test test_threadsafe test_pc bm
 
 ifdef D
 	DEBUG=-g
@@ -44,6 +44,10 @@ test:								$(OBJDIR)/test.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o \
 										$(OBJDIR)/partitioned_counter.o
 
 test_threadsafe:		$(OBJDIR)/test_threadsafe.o $(OBJDIR)/gqf.o \
+										$(OBJDIR)/gqf_file.o $(OBJDIR)/hashutil.o \
+										$(OBJDIR)/partitioned_counter.o
+
+test_pc:						$(OBJDIR)/test_partitioned_counter.o $(OBJDIR)/gqf.o \
 										$(OBJDIR)/gqf_file.o $(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 

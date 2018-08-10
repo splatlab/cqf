@@ -7,42 +7,55 @@
  * ============================================================================
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sched.h>
+#include <sys/sysinfo.h>
+#include <linux/unistd.h>
+#include <sys/syscall.h>
+#include <errno.h>
 
 #include "partitioned_counter.h"
 
-int pc_init(pc_t *pc, uint64_t *global_counter, uint32_t num_counters,
-						uint32_t threshold) {
-	if (num_counters > MAX_NUM_COUNTERS)
-		return -1;
-	pc->local_counters = (uint64_t *)calloc(num_counters,
-																					sizeof(pc->local_counters));
+#define min(a,b) ((a) < (b) ? (a) : (b))
+
+int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
+						int32_t threshold) {
+	pc->local_counters = (int64_t *)calloc(num_counters,
+																				 sizeof(*pc->local_counters));
 	if (pc->local_counters == NULL) {
 		perror("Couldn't allocate memory for local counters.");
-		exit(EXIT_FAILURE);
+		return PC_ERROR;
 	}
 	pc->global_counter = global_counter;
-	pc->num_counters = num_counters;
 	pc->threshold = threshold;
+	int num_cpus = (int)sysconf( _SC_NPROCESSORS_ONLN );
+	if (num_cpus < 0) {
+		perror( "sysconf" );
+		return PC_ERROR;
+	}
+	pc->num_counters = min(num_cpus, num_counters);
 
 	return 0;
 }
 
 void pc_add(pc_t *pc, int64_t count) {
 	int cpuid = sched_getcpu();
-	uint32_t counter_id = (cpuid * 0x5bd1e995) % pc->num_counters;
-	int64_t cur_count = __sync_add_and_fetch(&pc->local_counters[counter_id],
+	uint32_t counter_id = cpuid % pc->num_counters;
+	int64_t old_count = __sync_fetch_and_add(&pc->local_counters[counter_id],
 																					 count);
-	if (cur_count > threshold) {
+	int64_t cur_count = old_count + count;
+	if (cur_count > pc->threshold || cur_count < -pc->threshold) {
+		__sync_fetch_and_add(&pc->local_counters[counter_id], -cur_count);
 		__sync_fetch_and_add(pc->global_counter, cur_count);
-		__sync_fetch_and_add(&pc->local_counter[counter_id], -cur_count);
 	}
 }
 
-int pc_sync(pc_t *pc) {
-	return 0;
+void pc_sync(pc_t *pc) {
+	for (uint32_t i = 0; i < pc->num_counters; i++)
+		__sync_fetch_and_add(pc->global_counter, pc->local_counters[i]);
 }
 
 
