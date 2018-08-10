@@ -1953,12 +1953,15 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 					else
 						ret = insert(qf, hash, count, flags);
 				}
+				fprintf(stderr, "Resize finished.\n");
 			} else {
 				fprintf(stderr, "Resize failed\n");
 				ret = QF_NO_SPACE;
 			}
-		} else
+		} else {
 			fprintf(stderr, "The CQF is filling up.\n");
+			ret = QF_NO_SPACE;
+		}
 	}
 	return ret;
 }

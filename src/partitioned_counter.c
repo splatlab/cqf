@@ -61,5 +61,3 @@ void pc_sync(pc_t *pc) {
 	}
 }
 
-
-
