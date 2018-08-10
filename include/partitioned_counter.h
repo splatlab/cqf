@@ -29,7 +29,7 @@ typedef struct partitioned_counter pc_t;
 #define PC_ERROR -1
 
 /* on success returns 0.
- * If allocation fails returns ENOMEM
+ * If allocation fails returns PC_ERROR
  */
 int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
 						int32_t threshold);
