@@ -44,18 +44,21 @@ int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
 void pc_add(pc_t *pc, int64_t count) {
 	int cpuid = sched_getcpu();
 	uint32_t counter_id = cpuid % pc->num_counters;
-	int64_t old_count = __sync_fetch_and_add(&pc->local_counters[counter_id],
-																					 count);
-	int64_t cur_count = old_count + count;
+	int64_t cur_count = __atomic_add_fetch(&pc->local_counters[counter_id],
+																				 count, __ATOMIC_SEQ_CST);
 	if (cur_count > pc->threshold || cur_count < -pc->threshold) {
-		__sync_fetch_and_add(&pc->local_counters[counter_id], -cur_count);
-		__sync_fetch_and_add(pc->global_counter, cur_count);
+		int64_t new_count = __atomic_exchange_n(&pc->local_counters[counter_id],
+																						0, __ATOMIC_SEQ_CST);
+		__atomic_fetch_add(pc->global_counter, new_count, __ATOMIC_SEQ_CST);
 	}
 }
 
 void pc_sync(pc_t *pc) {
-	for (uint32_t i = 0; i < pc->num_counters; i++)
-		__sync_fetch_and_add(pc->global_counter, pc->local_counters[i]);
+	for (uint32_t i = 0; i < pc->num_counters; i++) {
+		__atomic_fetch_add(pc->global_counter, pc->local_counters[i],
+											 __ATOMIC_SEQ_CST);
+		__atomic_exchange_n(&pc->local_counters[i], 0, __ATOMIC_SEQ_CST);
+	}
 }
 
 
