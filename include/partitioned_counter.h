@@ -17,8 +17,15 @@
 extern "C" {
 #endif
 
+typedef struct local_counter {
+	int64_t counter;
+	int64_t padding[7];
+} local_counter;
+
+typedef struct local_counter lctr_t;
+
 typedef struct partitioned_counter {
-	int64_t *local_counters;
+	lctr_t *local_counters;
 	int64_t *global_counter;
 	uint32_t num_counters;
 	int32_t threshold;

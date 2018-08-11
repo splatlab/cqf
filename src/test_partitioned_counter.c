@@ -65,7 +65,7 @@ int main (int argc, char *argv[])
 		return 1;
 	}
 	int procs = atoi(argv[1]);
-	TOTAL_COUNT =  (1ULL << 26) / procs;
+	TOTAL_COUNT =  (1ULL << 30) / procs;
 
 	struct timeval start, stop;
 	pc_init(&pc_counter, &global_counter, 8, 100);
