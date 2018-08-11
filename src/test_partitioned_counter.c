@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sched.h>
 #include <linux/unistd.h>
 #include <sys/syscall.h>
@@ -24,7 +25,8 @@
 
 #define INC_TO 500000 // one million...
 #define DEC_TO INC_BY/2 // one million...
-#define INC_BY 100 // one million...
+#define INC_BY 10 // one million...
+#define NUM_RUNS 10
 
 uint64_t TOTAL_COUNT;
 
@@ -76,28 +78,32 @@ int main (int argc, char *argv[])
 	}
 	printf( "Starting %d threads...\n", procs );
 
-	gettimeofday(&start, NULL);
-	for (int i = 0; i < procs; i++) {
-		if (pthread_create(&thrs[i], NULL, thread_routine, (void *)(&pc_counter)))
-		{
-			perror( "pthread_create" );
-			procs = i;
-			break;
+	uint64_t total_time;
+	for (int i = 0; i < NUM_RUNS; i++) {
+		gettimeofday(&start, NULL);
+		for (int i = 0; i < procs; i++) {
+			if (pthread_create(&thrs[i], NULL, thread_routine, (void *)(&pc_counter)))
+			{
+				perror( "pthread_create" );
+				procs = i;
+				break;
+			}
 		}
+		for (int i = 0; i < procs; i++)
+			pthread_join( thrs[i], NULL );
+		pc_sync(&pc_counter);
+		gettimeofday(&stop, NULL);
+		total_time = tv2msec(stop) - tv2msec(start);
+		memset(thrs, 0, sizeof( pthread_t ) * procs);
 	}
-	for (int i = 0; i < procs; i++)
-		pthread_join( thrs[i], NULL );
-
-	pc_sync(&pc_counter);
-	gettimeofday(&stop, NULL);
-
 	free(thrs);
-	printf("time: %ld\n", tv2msec(stop) - tv2msec(start));
+
+	printf("Average time for %d runs: %ld ms\n", NUM_RUNS, total_time/NUM_RUNS);
 
 	printf("After doing all the math, global_int value is: %ld\n",
 				 global_counter);
 	/*int64_t exp_count = (INC_TO - DEC_TO) * INC_BY * procs;*/
-	int64_t exp_count = TOTAL_COUNT * INC_BY * procs;
+	int64_t exp_count = TOTAL_COUNT * INC_BY * NUM_RUNS * procs;
 	printf("Expected value is: %ld\n", exp_count);
 	if (global_counter != exp_count)
 		printf("Counting failed!\n");
