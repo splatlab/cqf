@@ -23,9 +23,9 @@
 
 #include	<stdlib.h>
 
-#define INC_TO 500000 // one million...
-#define DEC_TO INC_BY/2 // one million...
-#define INC_BY 10 // one million...
+#define INC_TO 500000
+#define DEC_TO INC_BY/2
+#define INC_BY 1
 #define NUM_RUNS 10
 
 uint64_t TOTAL_COUNT;
@@ -65,7 +65,7 @@ int main (int argc, char *argv[])
 		return 1;
 	}
 	int procs = atoi(argv[1]);
-	TOTAL_COUNT =  (1ULL << 24) / procs;
+	TOTAL_COUNT =  (1ULL << 26) / procs;
 
 	struct timeval start, stop;
 	pc_init(&pc_counter, &global_counter, 8, 100);
