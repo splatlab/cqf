@@ -37,6 +37,8 @@ int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
 		perror("Couldn't allocate memory for local counters.");
 		return PC_ERROR;
 	}
+	/*printf("Padding check: 0: %p 1: %p\n", (void*)&pc->local_counters[0],*/
+				 /*(void*)&pc->local_counters[1]);*/
 	pc->global_counter = global_counter;
 	pc->threshold = threshold;
 	
