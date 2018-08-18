@@ -15,6 +15,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <openssl/rand.h>
 
@@ -87,7 +88,7 @@ int main(int argc, char **argv)
 
 	QF file_qf;
 	fprintf(stdout, "Reading the CQF from disk.\n");
-	if (!qf_usefile(&file_qf, filename)) {
+	if (!qf_usefile(&file_qf, filename, PROT_READ | PROT_WRITE)) {
 		fprintf(stderr, "Can't initialize the CQF from file: %s.\n", filename);
 		abort();
 	}

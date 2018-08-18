@@ -23,10 +23,10 @@ extern "C" {
 	/* Initialize a file-backed CQF at "filename". */
 	bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 									value_bits, enum qf_hashmode hash, uint32_t seed, char*
-									filename);
+									filename, int prot);
 
 	/* Read "filename" into "qf". */
-	uint64_t qf_usefile(QF* qf, const char* filename);
+	uint64_t qf_usefile(QF* qf, const char* filename, int prot);
 
 	bool qf_closefile(QF* qf);
 

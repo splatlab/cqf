@@ -32,7 +32,7 @@
 
 bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 								 value_bits, enum qf_hashmode hash, uint32_t seed, char*
-								 filename)
+								 filename, int prot)
 {
 	uint64_t total_num_bytes = qf_init(qf, nslots, key_bits, value_bits, hash,
 																		 seed, NULL, 0);
@@ -53,8 +53,7 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 		perror("Couldn't fallocate file:\n");
 		exit(EXIT_FAILURE);
 	}
-	qf->metadata = (qfmetadata *)mmap(NULL, total_num_bytes, PROT_READ |
-																		PROT_WRITE, MAP_SHARED,
+	qf->metadata = (qfmetadata *)mmap(NULL, total_num_bytes, prot, MAP_SHARED,
 																		qf->runtimedata->f_info.fd, 0);
 	if (qf->metadata == MAP_FAILED) {
 		perror("Couldn't mmap metadata.");
@@ -82,7 +81,7 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 		return false;
 }
 
-uint64_t qf_usefile(QF* qf, const char* filename)
+uint64_t qf_usefile(QF* qf, const char* filename, int prot)
 {
 	struct stat sb;
 	int ret;
@@ -131,8 +130,8 @@ uint64_t qf_usefile(QF* qf, const char* filename)
 		exit(EXIT_FAILURE);
 	}
 #endif
-	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
-																		MAP_SHARED, qf->runtimedata->f_info.fd, 0);
+	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, prot, MAP_SHARED,
+																		qf->runtimedata->f_info.fd, 0);
 	if (qf->metadata == MAP_FAILED) {
 		perror("Couldn't mmap metadata.");
 		exit(EXIT_FAILURE);
