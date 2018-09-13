@@ -68,7 +68,7 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 
 	uint64_t init_size = qf_init(qf, nslots, key_bits, value_bits, hash, seed,
 															 qf->metadata, total_num_bytes);
-	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
@@ -108,7 +108,7 @@ uint64_t qf_usefile(QF* qf, const char* filename, int prot)
 		exit(EXIT_FAILURE);
 	}
 
-	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
@@ -163,7 +163,7 @@ bool qf_closefile(QF* qf)
 bool qf_deletefile(QF* qf)
 {
 	assert(qf->metadata != NULL);
-	char *path = (char *)malloc(strlen(qf->runtimedata->f_info.filepath));
+	char *path = (char *)malloc(strlen(qf->runtimedata->f_info.filepath) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
@@ -221,7 +221,7 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 		exit(EXIT_FAILURE);
 	}
 
-	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
