@@ -91,7 +91,7 @@ uint64_t qf_usefile(QF* qf, const char* filename, int prot)
 		perror("Couldn't allocate memory for runtime data.");
 		exit(EXIT_FAILURE);
 	}
-	qf->runtimedata->f_info.fd = open(filename, O_RDWR, S_IRWXU);
+	qf->runtimedata->f_info.fd = open(filename, O_RDONLY, S_IRUSR);
 	if (qf->runtimedata->f_info.fd < 0) {
 		perror("Couldn't open file.");
 		exit(EXIT_FAILURE);
