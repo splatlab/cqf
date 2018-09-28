@@ -1951,7 +1951,8 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 		fprintf(stdout, "Load factor: %lf\n", load_factor);
 		if (qf->metadata->auto_resize) {
 			fprintf(stdout, "Resizing the CQF.\n");
-			if (qf_resize_malloc(qf, qf->metadata->nslots * 2) > 0) {
+			if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) > 0)
+			{
 				if (ret == QF_NO_SPACE) {
 					if (count == 1)
 						ret = insert1(qf, hash, flags);
