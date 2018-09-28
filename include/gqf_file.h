@@ -22,7 +22,7 @@ extern "C" {
 
 	/* Initialize a file-backed CQF at "filename". */
 	bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-									value_bits, enum qf_hashmode hash, uint32_t seed, char*
+									value_bits, enum qf_hashmode hash, uint32_t seed, const char*
 									filename);
 
 #define QF_USEFILE_READ_ONLY (0x01)
