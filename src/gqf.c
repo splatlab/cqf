@@ -1695,8 +1695,6 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->metadata->noccupied_slots = 0;
 
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
-	qf->runtimedata->f_info.filepath = NULL;
-	qf->runtimedata->f_info.fd = 0;
 
 	/* initialize container resize */
 	qf->runtimedata->container_resize = qf_resize_malloc;
