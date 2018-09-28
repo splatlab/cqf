@@ -919,10 +919,10 @@ static inline bool insert_replace_slots_and_shift_remainders_and_runends_and_off
 				get_block(qf, i)->offset = (uint8_t) BITMASK(8*sizeof(qf->blocks[0].offset));
 		}
 	}
-						
+
 	for (i = 0; i < total_remainders; i++)
 		set_slot(qf, overwrite_index + i, remainders[i]);
-	
+
 	modify_metadata(qf, &qf->metadata->noccupied_slots, ninserts);
 
 	return true;
@@ -1670,7 +1670,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	if (buffer == NULL || total_num_bytes > buffer_len)
 		return total_num_bytes;
 
-	memset(buffer, 0, total_num_bytes);
+	// memset(buffer, 0, total_num_bytes);
 	qf->metadata = (qfmetadata *)(buffer);
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
@@ -1696,7 +1696,10 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
 	qf->runtimedata->f_info.filepath = NULL;
+	qf->runtimedata->f_info.fd = 0;
 
+	/* initialize container resize */
+	qf->runtimedata->container_resize = qf_resize_malloc;
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
@@ -1834,7 +1837,7 @@ int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits,
 								 qf->metadata->value_bits, qf->metadata->hash_mode,
 								 qf->metadata->seed))
-		return false;
+		return -1;
 	if (qf->metadata->auto_resize)
 		qf_set_auto_resize(&new_qf, true);
 
@@ -1916,7 +1919,11 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 	if (qf->metadata->noccupied_slots >= qf->metadata->nslots * 0.95) {
 		if (qf->metadata->auto_resize) {
 			fprintf(stdout, "Resizing the CQF.\n");
-			qf_resize_malloc(qf, qf->metadata->nslots * 2);
+			if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) < 0)
+			{
+				fprintf(stdout, "Resizing the failed.\n");
+				return QF_NO_SPACE;
+			}
 		} else
 			return QF_NO_SPACE;
 	}
