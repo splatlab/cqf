@@ -249,6 +249,7 @@ bool qf_deletefile(QF* qf)
 	strcpy(path, qf->runtimedata->f_info.filepath);
 	if (qf_closefile(qf)) {
 		remove(path);
+		free(path);
 		return true;
 	}
 
