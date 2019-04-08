@@ -15,6 +15,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <openssl/rand.h>
 
@@ -30,14 +31,19 @@ int main(int argc, char **argv)
 	}
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
-	uint64_t nhashbits = qbits + 8;
+	uint64_t nhashbits = qbits + 9;
 	uint64_t nslots = (1ULL << qbits);
-	uint64_t nvals = 750*nslots/1000;
-	uint64_t key_count = 1000;
+	uint64_t nvals = 75*nslots/100;
+	uint64_t key_count = 100000000;
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	if (!qf_malloc(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {
+	/*if (!qf_malloc(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {*/
+		/*fprintf(stderr, "Can't allocate CQF.\n");*/
+		/*abort();*/
+	/*}*/
+	if (!qf_initfile(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0,
+									 "mycqf.file")) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
@@ -47,8 +53,11 @@ int main(int argc, char **argv)
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
 	RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
+	srand(0);
 	for (uint64_t i = 0; i < nvals; i++) {
 		vals[i] = (1 * vals[i]) % qf.metadata->range;
+		/*vals[i] = rand() % qf.metadata->range;*/
+		/*fprintf(stdout, "%lx\n", vals[i]);*/
 	}
 
 	/* Insert keys in the CQF */
@@ -76,18 +85,41 @@ int main(int argc, char **argv)
 		}
 	}
 
+#if 0
+	for (uint64_t i = 0; i < nvals; i++) {
+		uint64_t count = qf_count_key_value(&qf, vals[i], 0, 0);
+		if (count < key_count) {
+			fprintf(stderr, "failed lookup during deletion for %lx %ld.\n", vals[i],
+							count);
+			abort();
+		}
+		if (count > 0) {
+			/*fprintf(stdout, "deleting: %lx\n", vals[i]);*/
+			qf_delete_key_value(&qf, vals[i], 0, QF_NO_LOCK);
+			/*qf_dump(&qf);*/
+			uint64_t cnt = qf_count_key_value(&qf, vals[i], 0, 0);
+			if (cnt > 0) {
+				fprintf(stderr, "failed lookup after deletion for %lx %ld.\n", vals[i],
+								cnt);
+				abort();
+			}
+		}
+	}
+#endif
+
 	/* Write the CQF to disk and read it back. */
-	char filename[] = "mycqf.cqf";
+	char filename[] = "mycqf_serialized.cqf";
 	fprintf(stdout, "Serializing the CQF to disk.\n");
 	uint64_t total_size = qf_serialize(&qf, filename);
 	if (total_size < sizeof(qfmetadata) + qf.metadata->total_size_in_bytes) {
 		fprintf(stderr, "CQF serialization failed.\n");
 		abort();
 	}
+	qf_deletefile(&qf);
 
 	QF file_qf;
 	fprintf(stdout, "Reading the CQF from disk.\n");
-	if (!qf_usefile(&file_qf, filename)) {
+	if (!qf_usefile(&file_qf, filename, QF_USEFILE_READ_WRITE)) {
 		fprintf(stderr, "Can't initialize the CQF from file: %s.\n", filename);
 		abort();
 	}
@@ -103,9 +135,10 @@ int main(int argc, char **argv)
 	fprintf(stdout, "Testing iterator and unique indexes.\n");
 	/* Initialize an iterator and validate counts. */
 	QFi qfi;
-	qf_iterator_from_position(&qf, &qfi, 0);
+	qf_iterator_from_position(&file_qf, &qfi, 0);
 	QF unique_idx;
-	if (!qf_malloc(&unique_idx, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {
+	if (!qf_malloc(&unique_idx, file_qf.metadata->nslots, nhashbits, 0,
+								 QF_HASH_INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate set.\n");
 		abort();
 	}
@@ -118,7 +151,7 @@ int main(int argc, char **argv)
 							key, count);
 			abort();
 		}
-		int64_t idx = qf_get_unique_index(&qf, key, value, 0);
+		int64_t idx = qf_get_unique_index(&file_qf, key, value, 0);
 		if (idx == QF_DOESNT_EXIST) {
 			fprintf(stderr, "Failed lookup for unique index for: %lx. index: %ld\n",
 							key, idx);
@@ -135,25 +168,31 @@ int main(int argc, char **argv)
 
 	/* remove some counts  (or keys) and validate. */
 	fprintf(stdout, "Testing remove/delete_key.\n");
-	srand(time(NULL));
-	for (uint64_t i = 0; i < 100; i++) {
-		uint64_t idx = rand()%nvals;
-		int ret = qf_delete_key_value(&file_qf, vals[idx], 0, QF_NO_LOCK);
-		uint64_t count = qf_count_key_value(&file_qf, vals[idx], 0, 0);
+	for (uint64_t i = 0; i < nvals; i++) {
+		uint64_t count = qf_count_key_value(&file_qf, vals[i], 0, 0);
+		/*if (count < key_count) {*/
+			/*fprintf(stderr, "failed lookup during deletion for %lx %ld.\n", vals[i],*/
+							/*count);*/
+			/*abort();*/
+		/*}*/
+		int ret = qf_delete_key_value(&file_qf, vals[i], 0, QF_NO_LOCK);
+		count = qf_count_key_value(&file_qf, vals[i], 0, 0);
 		if (count > 0) {
 			if (ret < 0) {
 				fprintf(stderr, "failed deletion for %lx %ld ret code: %d.\n",
-								vals[idx], count, ret);
+								vals[i], count, ret);
 				abort();
 			}
-			uint64_t new_count = qf_count_key_value(&file_qf, vals[idx], 0, 0);
+			uint64_t new_count = qf_count_key_value(&file_qf, vals[i], 0, 0);
 			if (new_count > 0) {
 				fprintf(stderr, "delete key failed for %lx %ld new count: %ld.\n",
-								vals[idx], count, new_count);
+								vals[i], count, new_count);
 				abort();
 			}
 		}
 	}
+
+	qf_deletefile(&file_qf);
 
 	fprintf(stdout, "Validated the CQF.\n");
 }

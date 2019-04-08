@@ -31,7 +31,7 @@
 #define NUM_SLOTS_TO_LOCK (1ULL<<16)
 
 bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-								 value_bits, enum qf_hashmode hash, uint32_t seed, char*
+								 value_bits, enum qf_hashmode hash, uint32_t seed, const char*
 								 filename)
 {
 	uint64_t total_num_bytes = qf_init(qf, nslots, key_bits, value_bits, hash,
@@ -43,7 +43,8 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 		perror("Couldn't allocate memory for runtime data.");
 		exit(EXIT_FAILURE);
 	}
-	qf->runtimedata->f_info.fd = open(filename, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU);
+	qf->runtimedata->f_info.fd = open(filename, O_RDWR | O_CREAT | O_TRUNC,
+																		S_IRWXU);
 	if (qf->runtimedata->f_info.fd < 0) {
 		perror("Couldn't open file.");
 		exit(EXIT_FAILURE);
@@ -69,12 +70,14 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 
 	uint64_t init_size = qf_init(qf, nslots, key_bits, value_bits, hash, seed,
 															 qf->metadata, total_num_bytes);
-	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
 	}
 	strcpy(qf->runtimedata->f_info.filepath, filename);
+	/* initialize container resize */
+	qf->runtimedata->container_resize = qf_resize_file;
 
 	if (init_size == total_num_bytes)
 		return true;
@@ -82,17 +85,29 @@ bool qf_initfile(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 		return false;
 }
 
-uint64_t qf_usefile(QF* qf, const char* filename)
+uint64_t qf_usefile(QF* qf, const char* filename, int flag)
 {
 	struct stat sb;
 	int ret;
+
+	int open_flag = 0, mmap_flag = 0;
+	if (flag == QF_USEFILE_READ_ONLY) {
+		open_flag = O_RDONLY;
+		mmap_flag = PROT_READ;
+	} else if(flag == QF_USEFILE_READ_WRITE) {
+		open_flag = O_RDWR;
+		mmap_flag = PROT_READ | PROT_WRITE;
+	} else {
+		fprintf(stderr, "Wrong flag specified.\n");
+		return 0;
+	}
 
 	qf->runtimedata = (qfruntime *)calloc(sizeof(qfruntime), 1);
 	if (qf->runtimedata == NULL) {
 		perror("Couldn't allocate memory for runtime data.");
 		exit(EXIT_FAILURE);
 	}
-	qf->runtimedata->f_info.fd = open(filename, O_RDWR, S_IRWXU);
+	qf->runtimedata->f_info.fd = open(filename, open_flag);
 	if (qf->runtimedata->f_info.fd < 0) {
 		perror("Couldn't open file.");
 		exit(EXIT_FAILURE);
@@ -109,12 +124,14 @@ uint64_t qf_usefile(QF* qf, const char* filename)
 		exit(EXIT_FAILURE);
 	}
 
-	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
 	}
 	strcpy(qf->runtimedata->f_info.filepath, filename);
+	/* initialize container resize */
+	qf->runtimedata->container_resize = qf_resize_file;
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
 	qf->runtimedata->locks = (volatile int *)calloc(qf->runtimedata->num_locks,
@@ -131,8 +148,8 @@ uint64_t qf_usefile(QF* qf, const char* filename)
 		exit(EXIT_FAILURE);
 	}
 #endif
-	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE,
-																		MAP_SHARED, qf->runtimedata->f_info.fd, 0);
+	qf->metadata = (qfmetadata *)mmap(NULL, sb.st_size, mmap_flag, MAP_SHARED,
+																		qf->runtimedata->f_info.fd, 0);
 	if (qf->metadata == MAP_FAILED) {
 		perror("Couldn't mmap metadata.");
 		exit(EXIT_FAILURE);
@@ -144,6 +161,66 @@ uint64_t qf_usefile(QF* qf, const char* filename)
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
+}
+
+int64_t qf_resize_file(QF *qf, uint64_t nslots)
+{
+	// calculate the new filename length
+	int new_filename_len = strlen(qf->runtimedata->f_info.filepath) + 1;
+	new_filename_len += 13; // To have an underscore and the nslots.
+	char *new_filename = (char *)malloc(new_filename_len);
+	if (new_filename == NULL) {
+		perror("Couldn't allocate memory for filename buffer during resize.");
+		exit(EXIT_FAILURE);
+	}
+	// Create new filename
+	int ret = snprintf(new_filename, new_filename_len, "%s_%ld",
+										 qf->runtimedata->f_info.filepath, nslots);
+	if (ret <= strlen(qf->runtimedata->f_info.filepath)) {
+		fprintf(stderr, "Wrong new filename created!");
+		return -1;
+	}
+
+	QF new_qf;
+	if (!qf_initfile(&new_qf, nslots, qf->metadata->key_bits,
+								 qf->metadata->value_bits, qf->metadata->hash_mode,
+								 qf->metadata->seed, new_filename))
+		return false;
+	if (qf->metadata->auto_resize)
+		qf_set_auto_resize(&new_qf, true);
+
+	// copy keys from qf into new_qf
+	QFi qfi;
+	qf_iterator_from_position(qf, &qfi, 0);
+	int64_t ret_numkeys = 0;
+	do {
+		uint64_t key, value, count;
+		qfi_get_hash(&qfi, &key, &value, &count);
+		qfi_next(&qfi);
+		int ret = qf_insert(&new_qf, key, value, count, QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret < 0) {
+			fprintf(stderr, "Failed to insert key: %ld into the new CQF.\n", key);
+			return ret;
+		}
+		ret_numkeys++;
+	} while(!qfi_end(&qfi));
+
+	// Copy old QF path in temp.
+	char *path = (char *)malloc(strlen(qf->runtimedata->f_info.filepath) + 1);
+	if (qf->runtimedata->f_info.filepath == NULL) {
+		perror("Couldn't allocate memory for runtime f_info filepath.");
+		exit(EXIT_FAILURE);
+	}
+	strcpy(path, qf->runtimedata->f_info.filepath);
+
+	// delete old QF
+	qf_deletefile(qf);
+	memcpy(qf, &new_qf, sizeof(QF));
+
+	rename(qf->runtimedata->f_info.filepath, path);
+	strcpy(qf->runtimedata->f_info.filepath, path);
+
+	return ret_numkeys;
 }
 
 bool qf_closefile(QF* qf)
@@ -164,7 +241,7 @@ bool qf_closefile(QF* qf)
 bool qf_deletefile(QF* qf)
 {
 	assert(qf->metadata != NULL);
-	char *path = (char *)malloc(strlen(qf->runtimedata->f_info.filepath));
+	char *path = (char *)malloc(strlen(qf->runtimedata->f_info.filepath) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
@@ -172,6 +249,7 @@ bool qf_deletefile(QF* qf)
 	strcpy(path, qf->runtimedata->f_info.filepath);
 	if (qf_closefile(qf)) {
 		remove(path);
+		free(path);
 		return true;
 	}
 
@@ -222,7 +300,7 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 		exit(EXIT_FAILURE);
 	}
 
-	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename));
+	qf->runtimedata->f_info.filepath = (char *)malloc(strlen(filename) + 1);
 	if (qf->runtimedata->f_info.filepath == NULL) {
 		perror("Couldn't allocate memory for runtime f_info filepath.");
 		exit(EXIT_FAILURE);
