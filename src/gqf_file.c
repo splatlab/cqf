@@ -331,3 +331,47 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }
 
+#define MADVISE_GRANULARITY (32)
+#define ROUND_TO_PAGE_GROUP(p) ((char *)(((intptr_t)(p)) - (((intptr_t)(p)) % (page_size * MADVISE_GRANULARITY))))
+
+static void make_madvise_calls(const QF *qf, uint64_t oldrun, uint64_t newrun)
+{
+  int page_size = sysconf(_SC_PAGESIZE);
+
+  char * oldblock = (char *)get_block(qf, oldrun / QF_SLOTS_PER_BLOCK);
+  char * newblock = (char *)get_block(qf, newrun / QF_SLOTS_PER_BLOCK);
+
+  oldblock = ROUND_TO_PAGE_GROUP(oldblock);
+  newblock = ROUND_TO_PAGE_GROUP(newblock);
+
+  if (oldblock < (char *)qf->blocks)
+    return;
+  
+  while (oldblock < newblock) {
+    madvise(oldblock, page_size * MADVISE_GRANULARITY, MADV_DONTNEED);
+    oldblock += page_size * MADVISE_GRANULARITY;
+  }
+}
+
+/* This wraps qfi_next, using madvise(DONTNEED) to reduce our RSS.
+   Only valid on mmapped QFs, i.e. cqfs from qf_initfile and
+   qf_usefile. */
+int qfi_next_madvise(QFi *qfi)
+{
+  uint64_t oldrun = qfi->run;
+  int      result = qfi_next(qfi);
+  uint64_t newrun = qfi->run;
+
+  make_madvise_calls(qfi->qf, oldrun, newrun);
+  
+  return result;
+}
+
+/* Furthermore, you can call this immediately after constructing the
+   qfi to call madvise(DONTNEED) on the portion of the cqf up to the
+   first element visited by the qfi. */
+int qfi_initial_madvise(QFi *qfi)
+{
+  make_madvise_calls(qfi->qf, 0, qfi->run);
+  return 0;
+}
