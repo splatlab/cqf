@@ -113,6 +113,20 @@ extern "C" {
 
 	typedef quotient_filter QF;
 
+#if QF_BITS_PER_SLOT > 0
+  static inline qfblock * get_block(const QF *qf, uint64_t block_index)
+  {
+    return &qf->blocks[block_index];
+  }
+#else
+  static inline qfblock * get_block(const QF *qf, uint64_t block_index)
+  {
+    return (qfblock *)(((char *)qf->blocks)
+                       + block_index * (sizeof(qfblock) + QF_SLOTS_PER_BLOCK *
+                                        qf->metadata->bits_per_slot / 8));
+  }
+#endif
+
 	// The below struct is used to instrument the code.
 	// It is not used in normal operations of the CQF.
 	typedef struct {

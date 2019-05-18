@@ -443,19 +443,6 @@ static inline uint64_t bitselectv(const uint64_t val, int ignore, int rank)
 	return bitselect(val & ~BITMASK(ignore % 64), rank);
 }
 
-#if QF_BITS_PER_SLOT > 0
-static inline qfblock * get_block(const QF *qf, uint64_t block_index)
-{
-	return &qf->blocks[block_index];
-}
-#else
-static inline qfblock * get_block(const QF *qf, uint64_t block_index)
-{
-	return (qfblock *)(((char *)qf->blocks) + block_index * (sizeof(qfblock) +
-						QF_SLOTS_PER_BLOCK * qf->metadata->bits_per_slot / 8));
-}
-#endif
-
 static inline int is_runend(const QF *qf, uint64_t index)
 {
 	return (METADATA_WORD(qf, runends, index) >> ((index % QF_SLOTS_PER_BLOCK) %
