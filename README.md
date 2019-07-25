@@ -32,10 +32,10 @@ Overview
 
 API
 --------
-* 'qf_insert(item, count)': insert an item to the filter
-* 'qf_count_key_value(item)': return the count of the item. Note that this
+* `qf_insert(item, count)`: insert an item to the filter
+* `qf_count_key_value(item)`: return the count of the item. Note that this
   method may return false positive results like Bloom filters or an over count.
-* 'qf_remove(item, count)': decrement the count of the item by count. If count
+* `qf_remove(item, count)`: decrement the count of the item by count. If count
   is 0 then completely remove the item.
 
 Build
