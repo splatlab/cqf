@@ -1649,7 +1649,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
 	qf->metadata->magic_endian_number = MAGIC_NUMBER;
-	qf->metadata->auto_resize = 0;
+	qf->metadata->reserved = 0;
 	qf->metadata->hash_mode = hash;
 	qf->metadata->total_size_in_bytes = size;
 	qf->metadata->seed = seed;
@@ -1671,6 +1671,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	qf->runtimedata->num_locks = (qf->metadata->xnslots/NUM_SLOTS_TO_LOCK)+2;
 
 	/* initialize container resize */
+	qf->runtimedata->auto_resize = 0;
 	qf->runtimedata->container_resize = qf_resize_malloc;
 	/* initialize all the locks to 0 */
 	qf->runtimedata->metadata_lock = 0;
@@ -1816,7 +1817,7 @@ int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 								 qf->metadata->value_bits, qf->metadata->hash_mode,
 								 qf->metadata->seed))
 		return -1;
-	if (qf->metadata->auto_resize)
+	if (qf->runtimedata->auto_resize)
 		qf_set_auto_resize(&new_qf, true);
 
 	// copy keys from qf into new_qf
@@ -1858,7 +1859,7 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 	if (init_size > buffer_len)
 		return init_size;
 
-	if (qf->metadata->auto_resize)
+	if (qf->runtimedata->auto_resize)
 		qf_set_auto_resize(&new_qf, true);
 
 	// copy keys from qf into new_qf
@@ -1884,9 +1885,9 @@ uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 void qf_set_auto_resize(QF* qf, bool enabled)
 {
 	if (enabled)
-		qf->metadata->auto_resize = 1;
+		qf->runtimedata->auto_resize = 1;
 	else
-		qf->metadata->auto_resize = 0;
+		qf->runtimedata->auto_resize = 0;
 }
 
 int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
@@ -1895,7 +1896,7 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 	// We fill up the CQF up to 95% load factor.
 	// This is a very conservative check.
 	if (qf->metadata->noccupied_slots >= qf->metadata->nslots * 0.95) {
-		if (qf->metadata->auto_resize) {
+		if (qf->runtimedata->auto_resize) {
 			fprintf(stdout, "Resizing the CQF.\n");
 			if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) < 0)
 			{
@@ -1929,7 +1930,7 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 		float load_factor = qf->metadata->noccupied_slots /
 			(float)qf->metadata->nslots;
 		fprintf(stdout, "Load factor: %lf\n", load_factor);
-		if (qf->metadata->auto_resize) {
+		if (qf->runtimedata->auto_resize) {
 			fprintf(stdout, "Resizing the CQF.\n");
 			if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) > 0)
 			{
@@ -2135,7 +2136,7 @@ __uint128_t qf_get_hash_range(const QF *qf) {
 }
 
 bool qf_is_auto_resize_enabled(const QF *qf) {
-	if (qf->metadata->auto_resize == 1)
+	if (qf->runtimedata->auto_resize == 1)
 		return true;
 	return false;
 }

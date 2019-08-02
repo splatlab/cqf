@@ -75,6 +75,7 @@ extern "C" {
 
 	typedef struct quotient_filter_runtime_data {
 		file_info f_info;
+		uint32_t auto_resize;
 		int64_t (*container_resize)(QF *qf, uint64_t nslots);
 		uint64_t num_locks;
 		volatile int metadata_lock;
@@ -87,7 +88,7 @@ extern "C" {
 	typedef struct quotient_filter_metadata {
 		uint64_t magic_endian_number;
 		enum qf_hashmode hash_mode;
-		uint32_t auto_resize;
+		uint32_t reserved;
 		uint64_t total_size_in_bytes;
 		uint32_t seed;
 		uint64_t nslots;
