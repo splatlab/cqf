@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	qf_deletefile(&file_qf);
+	/*qf_deletefile(&file_qf);*/
 
 	fprintf(stdout, "Validated the CQF.\n");
 }

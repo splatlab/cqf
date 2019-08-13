@@ -160,6 +160,10 @@ uint64_t qf_usefile(QF* qf, const char* filename, int flag)
 	}
 	qf->blocks = (qfblock *)(qf->metadata + 1);
 
+	pc_init(&qf->runtimedata->pc_nelts, (int64_t*)&qf->metadata->nelts, 8, 100);
+	pc_init(&qf->runtimedata->pc_ndistinct_elts, (int64_t*)&qf->metadata->ndistinct_elts, 8, 100);
+	pc_init(&qf->runtimedata->pc_noccupied_slots, (int64_t*)&qf->metadata->noccupied_slots, 8, 100);
+
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }
 
@@ -186,7 +190,7 @@ int64_t qf_resize_file(QF *qf, uint64_t nslots)
 								 qf->metadata->value_bits, qf->metadata->hash_mode,
 								 qf->metadata->seed, new_filename))
 		return false;
-	if (qf->metadata->auto_resize)
+	if (qf->runtimedata->auto_resize)
 		qf_set_auto_resize(&new_qf, true);
 
 	// copy keys from qf into new_qf
@@ -227,6 +231,7 @@ bool qf_closefile(QF* qf)
 {
 	assert(qf->metadata != NULL);
 	int fd = qf->runtimedata->f_info.fd;
+	qf_sync_counters(qf);
 	uint64_t size = qf->metadata->total_size_in_bytes + sizeof(qfmetadata);
 	void *buffer = qf_destroy(qf);
 	if (buffer != NULL) {
@@ -264,6 +269,7 @@ uint64_t qf_serialize(const QF *qf, const char *filename)
 		perror("Error opening file for serializing.");
 		exit(EXIT_FAILURE);
 	}
+	qf_sync_counters(qf);
 	fwrite(qf->metadata, sizeof(qfmetadata), 1, fout);
 	fwrite(qf->blocks, qf->metadata->total_size_in_bytes, 1, fout);
 	fclose(fout);

@@ -235,7 +235,9 @@ extern "C" {
 	/* Number of (distinct) key-value pairs. */
 	uint64_t qf_get_sum_of_counts(const QF *qf);
 	uint64_t qf_get_num_distinct_key_value_pairs(const QF *qf);
-	
+
+	void qf_sync_counters(const QF *qf);
+
 	/****************************************
 		Iterators
 	*****************************************/
