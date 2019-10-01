@@ -17,6 +17,7 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <assert.h>
 #include <openssl/rand.h>
 
 #include "include/gqf.h"
@@ -135,17 +136,18 @@ int main(int argc, char **argv)
 	fprintf(stdout, "Testing iterator and unique indexes.\n");
 	/* Initialize an iterator and validate counts. */
 	QFi qfi;
-	qf_iterator_from_position(&file_qf, &qfi, 0);
 	QF unique_idx;
 	if (!qf_malloc(&unique_idx, file_qf.metadata->nslots, nhashbits, 0,
 								 QF_HASH_INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate set.\n");
 		abort();
 	}
-	do {
+  int64_t last_index = -1;
+  int i = 0;
+	qf_iterator_from_position(&file_qf, &qfi, 0);
+  while(!qfi_end(&qfi)) {
 		uint64_t key, value, count;
 		qfi_get_key(&qfi, &key, &value, &count);
-		qfi_next(&qfi);
 		if (count < key_count) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
 							key, count);
@@ -157,15 +159,28 @@ int main(int argc, char **argv)
 							key, idx);
 			abort();
 		}
-		if (qf_count_key_value(&unique_idx, idx, 0, 0) > 0) {
+    if (idx <= last_index) {
+			fprintf(stderr, "Unique indexes not strictly increasing.\n");
+			abort();      
+    }
+    last_index = idx;
+		if (qf_count_key_value(&unique_idx, key, 0, 0) > 0) {
 			fprintf(stderr, "Failed unique index for: %lx. index: %ld\n",
 							key, idx);
 			abort();
-		} else {
-			qf_insert(&unique_idx, idx, 0, 1, QF_NO_LOCK);
-		}
-	} while(!qfi_end(&qfi));
-
+		} 
+    qf_insert(&unique_idx, key, 0, 1, QF_NO_LOCK);
+    int64_t newindex = qf_get_unique_index(&unique_idx, key, 0, 0);
+    if (idx < newindex) {
+      fprintf(stderr, "Index weirdness: index %dth key %ld was at %ld, is now at %ld\n",
+              i, key, idx, newindex);
+			//abort();      
+    }
+    
+    i++;
+		qfi_next(&qfi);
+  }
+  
 	/* remove some counts  (or keys) and validate. */
 	fprintf(stdout, "Testing remove/delete_key.\n");
 	for (uint64_t i = 0; i < nvals; i++) {
