@@ -31,10 +31,10 @@ int main(int argc, char **argv)
 	}
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
-	uint64_t nhashbits = qbits + 9;
+	uint64_t nhashbits = qbits + 8;
 	uint64_t nslots = (1ULL << qbits);
-	uint64_t nvals = 75*nslots/100;
-	uint64_t key_count = 100000000;
+	uint64_t nvals = 95*nslots/100;
+	uint64_t key_count = 4;
 	uint64_t *vals;
 
 	/* Initialise the CQF */
@@ -119,7 +119,7 @@ int main(int argc, char **argv)
 
 	QF file_qf;
 	fprintf(stdout, "Reading the CQF from disk.\n");
-	if (!qf_usefile(&file_qf, filename, QF_USEFILE_READ_WRITE)) {
+	if (!qf_deserialize(&file_qf, filename)) {
 		fprintf(stderr, "Can't initialize the CQF from file: %s.\n", filename);
 		abort();
 	}
@@ -137,11 +137,12 @@ int main(int argc, char **argv)
 	QFi qfi;
 	qf_iterator_from_position(&file_qf, &qfi, 0);
 	QF unique_idx;
-	if (!qf_malloc(&unique_idx, file_qf.metadata->nslots, nhashbits, 0,
+	if (!qf_malloc(&unique_idx, file_qf.metadata->nslots * 2, nhashbits, 0,
 								 QF_HASH_INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate set.\n");
 		abort();
 	}
+	/*qf_set_auto_resize(&unique_idx, true);*/
 	do {
 		uint64_t key, value, count;
 		qfi_get_key(&qfi, &key, &value, &count);
@@ -192,7 +193,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	/*qf_deletefile(&file_qf);*/
+	qf_deletefile(&file_qf);
 
 	fprintf(stdout, "Validated the CQF.\n");
 }

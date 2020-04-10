@@ -1631,11 +1631,11 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	xnslots = nslots + 10*sqrt((double)nslots);
 	nblocks = (xnslots + QF_SLOTS_PER_BLOCK - 1) / QF_SLOTS_PER_BLOCK;
 	key_remainder_bits = key_bits;
-	while (nslots > 1) {
-		assert(key_remainder_bits > 0);
+	while (nslots > 1 && key_remainder_bits > 0) {
 		key_remainder_bits--;
 		nslots >>= 1;
 	}
+	assert(key_remainder_bits >= 2);
 
 	bits_per_slot = key_remainder_bits + value_bits;
 	assert (QF_BITS_PER_SLOT == 0 || QF_BITS_PER_SLOT == qf->metadata->bits_per_slot);
