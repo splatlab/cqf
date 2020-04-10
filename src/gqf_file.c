@@ -322,7 +322,14 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 		perror("Couldn't allocate memory for runtime locks.");
 		exit(EXIT_FAILURE);
 	}
-	qf->blocks = (qfblock *)calloc(qf->metadata->total_size_in_bytes, 1);
+	qf->metadata = (qfmetadata *)realloc(qf->metadata,
+																			 qf->metadata->total_size_in_bytes +
+																			 sizeof(qfmetadata));
+	if (qf->metadata == NULL) {
+		perror("Couldn't allocate memory for metadata.");
+		exit(EXIT_FAILURE);
+	}
+	qf->blocks = (qfblock *)(qf->metadata + 1);
 	if (qf->blocks == NULL) {
 		perror("Couldn't allocate memory for blocks.");
 		exit(EXIT_FAILURE);
@@ -333,6 +340,10 @@ uint64_t qf_deserialize(QF *qf, const char *filename)
 		exit(EXIT_FAILURE);
 	}
 	fclose(fin);
+
+	pc_init(&qf->runtimedata->pc_nelts, (int64_t*)&qf->metadata->nelts, 8, 100);
+	pc_init(&qf->runtimedata->pc_ndistinct_elts, (int64_t*)&qf->metadata->ndistinct_elts, 8, 100);
+	pc_init(&qf->runtimedata->pc_noccupied_slots, (int64_t*)&qf->metadata->noccupied_slots, 8, 100);
 
 	return sizeof(qfmetadata) + qf->metadata->total_size_in_bytes;
 }
