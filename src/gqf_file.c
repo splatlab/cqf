@@ -178,7 +178,7 @@ int64_t qf_resize_file(QF *qf, uint64_t nslots)
 		exit(EXIT_FAILURE);
 	}
 	// Create new filename
-	int ret = snprintf(new_filename, new_filename_len, "%s_%ld",
+	uint64_t ret = snprintf(new_filename, new_filename_len, "%s_%ld",
 										 qf->runtimedata->f_info.filepath, nslots);
 	if (ret <= strlen(qf->runtimedata->f_info.filepath)) {
 		fprintf(stderr, "Wrong new filename created!");
