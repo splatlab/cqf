@@ -8,11 +8,7 @@
  */
 
 #include <stdlib.h>
-#if 0
 # include <assert.h>
-#else
-# define assert(x)
-#endif
 #include <string.h>
 #include <inttypes.h>
 #include <stdio.h>

@@ -25,13 +25,14 @@
 
 int main(int argc, char **argv)
 {
-	if (argc < 2) {
-		fprintf(stderr, "Please specify the log of the number of slots in the CQF.\n");
+	if (argc < 3) {
+		fprintf(stderr, "Please specify the log of the number of slots and the number of remainder bits in the CQF.\n");
 		exit(1);
 	}
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
-	uint64_t nhashbits = qbits + 8;
+	uint64_t rbits = atoi(argv[2]);
+	uint64_t nhashbits = qbits + rbits;
 	uint64_t nslots = (1ULL << qbits);
 	uint64_t nvals = 95*nslots/100;
 	uint64_t key_count = 4;
@@ -137,7 +138,7 @@ int main(int argc, char **argv)
 	QFi qfi;
 	qf_iterator_from_position(&file_qf, &qfi, 0);
 	QF unique_idx;
-	if (!qf_malloc(&unique_idx, file_qf.metadata->nslots * 2, nhashbits, 0,
+	if (!qf_malloc(&unique_idx, file_qf.metadata->nslots, nhashbits, 0,
 								 QF_HASH_INVERTIBLE, 0)) {
 		fprintf(stderr, "Can't allocate set.\n");
 		abort();
