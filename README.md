@@ -52,7 +52,7 @@ To build on a Haswell or newer hardware:
  $ ./test 24
 ```
 
-To build on an older hardare (older than Haswell):
+To build on an older hardware (older than Haswell):
 ```bash
  $ make NH=1 test
  $ ./test 24
