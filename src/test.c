@@ -44,7 +44,7 @@ int main(int argc, char **argv)
 	/*abort();*/
 	/*}*/
 	if (!qf_initfile(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0,
-									 "mycqf.file")) {
+									 "/tmp/mycqf.file")) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 #endif
 
 	/* Write the CQF to disk and read it back. */
-	char filename[] = "mycqf_serialized.cqf";
+	char filename[] = "/tmp/mycqf_serialized.cqf";
 	fprintf(stdout, "Serializing the CQF to disk.\n");
 	uint64_t total_size = qf_serialize(&qf, filename);
 	if (total_size < sizeof(qfmetadata) + qf.metadata->total_size_in_bytes) {
