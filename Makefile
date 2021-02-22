@@ -23,9 +23,9 @@ LOC_SRC=src
 LOC_TEST=test
 OBJDIR=obj
 
-CC = gcc -std=gnu11
-CXX = g++ -std=c++11
-LD= gcc -std=gnu11
+CC = cc -std=gnu11
+CXX = CC -std=c++11
+LD= cc -std=gnu11
 
 CXXFLAGS = -Wall $(DEBUG) $(PROFILE) $(OPT) $(ARCH) -m64 -I. -Iinclude
 
