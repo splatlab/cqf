@@ -64,7 +64,7 @@ int main(int argc, char **argv)
 	//pre-hash everything
 	for (uint64_t i = 0; i < nvals; i++) {
 		vals[i] = (1 * vals[i]) % qf.metadata->range;
-		hashes[i] = hash_64(arr[i], BITMASK(nhashbits));
+		hashes[i] = hash_64(arr[i], BITMASK(qf->metadata->bits_per_slot));
 		
 	}
 
