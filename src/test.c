@@ -58,13 +58,13 @@ int main(int argc, char **argv)
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
-	hashes = (uint64_t*)malloc(nvals * sizeof(hashes[0]);
+	hashes = (uint64_t*)malloc(nvals * sizeof(hashes[0]));
 	RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
 	srand(0);
 	//pre-hash everything
 	for (uint64_t i = 0; i < nvals; i++) {
 		vals[i] = (1 * vals[i]) % qf.metadata->range;
-		hashes[i] = hash_64(arr[i], BITMASK(qf->metadata->bits_per_slot));
+		hashes[i] = hash_64(vals[i], BITMASK(nhashbits));
 		
 	}
 
