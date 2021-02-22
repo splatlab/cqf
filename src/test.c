@@ -31,7 +31,7 @@ int main(int argc, char **argv)
 	if (argc < 3) {
 		fprintf(stderr, "Please specify the log of the number of slots and the number of remainder bits in the CQF.\n");
 		exit(1);
-	}f
+	}
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t rbits = atoi(argv[2]);
