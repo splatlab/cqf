@@ -22,21 +22,26 @@
 #include "include/gqf.h"
 #include "include/gqf_int.h"
 #include "include/gqf_file.h"
+#include "hashutil.h"
+
+#define BITMASK(nbits)((nbits) == 64 ? 0xffffffffffffffff : MAX_VALUE(nbits))
 
 int main(int argc, char **argv)
 {
 	if (argc < 3) {
 		fprintf(stderr, "Please specify the log of the number of slots and the number of remainder bits in the CQF.\n");
 		exit(1);
-	}
+	}f
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
 	uint64_t rbits = atoi(argv[2]);
 	uint64_t nhashbits = qbits + rbits;
 	uint64_t nslots = (1ULL << qbits);
+	//this can be changed to change the % it fills up
 	uint64_t nvals = 95*nslots/100;
 	uint64_t key_count = 4;
 	uint64_t *vals;
+	uint64_t* hashes;
 
 	/* Initialise the CQF */
 	/*if (!qf_malloc(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {*/
@@ -53,15 +58,19 @@ int main(int argc, char **argv)
 
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
+	hashes = (uint64_t*)malloc(nvals * sizeof(hashes[0]);
 	RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
 	srand(0);
+	//pre-hash everything
 	for (uint64_t i = 0; i < nvals; i++) {
 		vals[i] = (1 * vals[i]) % qf.metadata->range;
-		/*vals[i] = rand() % qf.metadata->range;*/
-		/*fprintf(stdout, "%lx\n", vals[i]);*/
+		hashes[i] = hash_64(arr[i], BITMASK(nhashbits));
+		
 	}
 
 	/* Insert keys in the CQF */
+
+	
 	for (uint64_t i = 0; i < nvals; i++) {
 		int ret = qf_insert(&qf, vals[i], 0, key_count, QF_NO_LOCK);
 		if (ret < 0) {
