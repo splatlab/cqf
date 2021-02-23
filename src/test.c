@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 	}
 
 	qf_set_auto_resize(&qf, true);
-
+	qf->metadata->hash_mode = QF_HASH_NONE;
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
 	hashes = (uint64_t*)malloc(nvals * sizeof(hashes[0]));
