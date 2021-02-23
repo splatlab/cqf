@@ -49,14 +49,13 @@ int main(int argc, char **argv)
 	/*fprintf(stderr, "Can't allocate CQF.\n");*/
 	/*abort();*/
 	/*}*/
-	if (!qf_initfile(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0,
+	if (!qf_initfile(&qf, nslots, nhashbits, 0, QF_HASH_NONE, 0,
 									 "/tmp/mycqf.file")) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
 
 	qf_set_auto_resize(&qf, true);
-	qf->metadata->hash_mode = QF_HASH_NONE;
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
 	hashes = (uint64_t*)malloc(nvals * sizeof(hashes[0]));
@@ -65,8 +64,9 @@ int main(int argc, char **argv)
 	//pre-hash everything
 	for (uint64_t i = 0; i < nvals; i++) {
 		vals[i] = (1 * vals[i]) % qf.metadata->range;
-		hashes[i] = hash_64(vals[i], BITMASK(nhashbits));
-		
+		//hashes[i] = hash_64(vals[i], BITMASK(nhashbits));
+		/*fake hash until implemented*/
+		hashes[i] = vals[i];
 	}
 
 	/* Insert keys in the CQF */

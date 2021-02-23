@@ -1875,6 +1875,8 @@ void qf_set_auto_resize(QF* qf, bool enabled)
 		qf->runtimedata->auto_resize = 0;
 }
 
+        
+
 int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 							flags)
 {
@@ -2591,10 +2593,3 @@ void qf_intersect(const QF *qfa, const QF *qfb, QF *qfr)
 			qf_insert(qfr, key, value, count, QF_NO_LOCK | QF_KEY_IS_HASH);
 	} while (!qfi_next(&qfi));
 }
-
-/* magnitude of a QF. */
-uint64_t qf_magnitude(const QF *qf)
-{
-	return sqrt(qf_inner_product(qf, qf));
-}
-
