@@ -70,8 +70,8 @@ int main(int argc, char **argv)
 	}
 
 	/* Insert keys in the CQF */
-
 	
+	qf_insert_gpu();
 	for (uint64_t i = 0; i < nvals; i++) {
 		int ret = qf_insert(&qf, vals[i], 0, key_count, QF_NO_LOCK);
 		if (ret < 0) {
