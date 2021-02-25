@@ -1930,6 +1930,7 @@ void qf_insert_gpu(QF* qf, uint64_t key, uint64_t* vals, uint64_t count, uint64_
 	// This is a very conservative check.
 	
 	for (int i = 0; i < nvals; i++) {
+		uint64_t value = vals[i];
 		/*
 		* //Don't worry about resizing the CQF; it should be set big enough before the start
 		if (qf_get_num_occupied_slots(qf) >= qf->metadata->nslots * 0.95) {
