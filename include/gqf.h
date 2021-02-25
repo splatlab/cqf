@@ -144,7 +144,7 @@ extern "C" {
 	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 								flags);
 
-	void qf_insert_gpu(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint64_t nvals, uint8_t
+	void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint64_t nvals, uint8_t
 		flags);
 	/* Set the counter for this key/value pair to count. 
 	 Return value: Same as qf_insert. 
