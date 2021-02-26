@@ -1938,11 +1938,11 @@ void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint6
 				if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) < 0)
 				{
 					fprintf(stderr, "Resizing the failed.\n");
-					return QF_NO_SPACE;
+					return;
 				}
 			}
 			else
-				return QF_NO_SPACE;
+				return;
 		}
 		
 		if (count == 0)
