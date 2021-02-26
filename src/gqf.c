@@ -1931,8 +1931,8 @@ void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint6
 	
 	for (int i = 0; i < nvals; i++) {
 		uint64_t key = keys[i];
-		/*
-		* //Don't worry about resizing the CQF; it should be set big enough before the start
+		
+		//Don't worry about resizing the CQF; it should be set big enough before the start
 		if (qf_get_num_occupied_slots(qf) >= qf->metadata->nslots * 0.95) {
 			if (qf->runtimedata->auto_resize) {
 				if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) < 0)
@@ -1944,7 +1944,7 @@ void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint6
 			else
 				return QF_NO_SPACE;
 		}
-		*/
+		
 		if (count == 0)
 			return;
 		/*
