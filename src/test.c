@@ -38,10 +38,10 @@ int main(int argc, char **argv)
 	uint64_t rbits = atoi(argv[2]);
 	uint64_t nhashbits = qbits + rbits;
 	//I think this is number of slots per quotient
-	uint64_t nslots = (16ULL << qbits);
+	uint64_t nslots = (1ULL << qbits);
 	//this can be changed to change the % it fills up
-	uint64_t nvals = 80*nslots/100;
-	uint64_t key_count = 4;
+	uint64_t nvals =10*nslots/100;
+	uint64_t key_count = 1;
 	uint64_t *vals;
 	uint64_t* hashes;
 

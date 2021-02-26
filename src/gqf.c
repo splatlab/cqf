@@ -1926,13 +1926,17 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 	}
 	return ret;
 }
+int cmpfunc (const void * a, const void * b) {
+   return ( *(int*)a - *(int*)b );
+}
+
 void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint64_t nvals, uint8_t
 	flags) {
 	int tid = 1;
 
 	// We fill up the CQF up to 95% load factor.
 	// This is a very conservative check.
-	std::sort(keys[0], keys[nvals];
+	//qsort(keys, nvals, sizeof(uint64_t), cmpfunc);
 	for (int i = 0; i < nvals; i++) {
 		uint64_t key = keys[i];
 		
