@@ -1782,6 +1782,7 @@ void qf_reset(QF *qf)
 
 int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 {
+	printf("resize_malloc to %d\n", nslots);
 	QF new_qf;
 	if (!qf_malloc(&new_qf, nslots, qf->metadata->key_bits,
 								 qf->metadata->value_bits, qf->metadata->hash_mode,
@@ -1814,6 +1815,7 @@ int64_t qf_resize_malloc(QF *qf, uint64_t nslots)
 
 uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t buffer_len)
 {
+	printf("resize_to %d\n", nslots);
 	QF new_qf;
 	new_qf.runtimedata = (qfruntime *)calloc(sizeof(qfruntime), 1);
 	if (new_qf.runtimedata == NULL) {
