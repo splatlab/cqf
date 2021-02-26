@@ -1191,9 +1191,9 @@ static inline int insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 			(hash_bucket_block_offset % 64);
 		
 		ret_distance = 0;
-		modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
-		modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
-		modify_metadata(&qf->runtimedata->pc_nelts, 1);
+		//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+		//modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
+		//modify_metadata(&qf->runtimedata->pc_nelts, 1);
 	} else {
 		uint64_t runend_index       = run_end(qf, hash_bucket_index);
 		int operation = 0; /* Insert into empty bucket */
@@ -1259,7 +1259,7 @@ static inline int insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 				operation = 1;
 				insert_index = runstart_index;
 				new_value = hash_remainder;
-				modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+				//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
 
 				/* This is the first time we're inserting this remainder, but
 					 there are larger remainders already in the run. */
@@ -1267,7 +1267,7 @@ static inline int insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 				operation = 2; /* Inserting */
 				insert_index = runstart_index;
 				new_value = hash_remainder;
-				modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+				//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
 
 				/* Cases below here: we're incrementing the (simple or
 					 extended) counter for this remainder. */
@@ -1353,9 +1353,9 @@ static inline int insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 					operation = -1;
 				}
 			}
-		} else {
-			modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
-		}
+		} //else {
+			//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+		//}
 
 		if (operation >= 0) {
 			uint64_t empty_slot_index = find_first_empty_slot(qf, runend_index+1);
@@ -1394,9 +1394,9 @@ static inline int insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 					get_block(qf, i)->offset++;
 				assert(get_block(qf, i)->offset != 0);
 			}
-			modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
+			//modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
 		}
-		modify_metadata(&qf->runtimedata->pc_nelts, 1);
+		//modify_metadata(&qf->runtimedata->pc_nelts, 1);
 		METADATA_WORD(qf, occupieds, hash_bucket_index) |= 1ULL <<
 			(hash_bucket_block_offset % 64);
 	}
@@ -1434,9 +1434,9 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, uint8_t
 			(hash_bucket_block_offset % 64);
 
 		//ERIC TODO: see if this metadata is needed--probably isn't compatible with GPU
-		modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
-		modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
-		modify_metadata(&qf->runtimedata->pc_nelts, 1);
+		//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+		//modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
+		//modify_metadata(&qf->runtimedata->pc_nelts, 1);
 		/* This trick will, I hope, keep the fast case fast. */
 		if (count > 1) {
 			insert(qf, hash, count - 1, QF_NO_LOCK);
@@ -1451,7 +1451,7 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, uint8_t
 			ret = insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 0, hash_bucket_index, runstart_index, p, &new_values[67] - p, 0);
 			if (!ret)
 				return QF_NO_SPACE;
-			modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+			//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
 			ret_distance = runstart_index - hash_bucket_index;
 		} else { /* Non-empty bucket */
 
@@ -1472,7 +1472,7 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, uint8_t
 				ret = insert_replace_slots_and_shift_remainders_and_runends_and_offsets(qf, 1, /* Append to bucket */hash_bucket_index, current_end + 1, p, &new_values[67] - p, 0);
 				if (!ret)
 					return QF_NO_SPACE;
-				modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+				//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
 				ret_distance = (current_end + 1) - hash_bucket_index;
 				/* Found a counter for this remainder.  Add in the new count. */
 			} else if (current_remainder == hash_remainder) {
@@ -1500,13 +1500,13 @@ static inline int insert(QF *qf, __uint128_t hash, uint64_t count, uint8_t
 																																								0);
 				if (!ret)
 					return QF_NO_SPACE;
-				modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+				//modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
 			ret_distance = runstart_index - hash_bucket_index;
 			}
 		}
 		METADATA_WORD(qf, occupieds, hash_bucket_index) |= 1ULL << (hash_bucket_block_offset % 64);
 		
-		modify_metadata(&qf->runtimedata->pc_nelts, count);
+		//modify_metadata(&qf->runtimedata->pc_nelts, count);
 	}
 	/*
 	if (GET_NO_LOCK(runtime_lock) != QF_NO_LOCK) {
