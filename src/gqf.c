@@ -1607,6 +1607,7 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits
 	size = nblocks * (sizeof(qfblock) + QF_SLOTS_PER_BLOCK * bits_per_slot / 8);
 #endif
 
+
 	total_num_bytes = sizeof(qfmetadata) + size;
 	if (buffer == NULL || total_num_bytes > buffer_len)
 		return total_num_bytes;
@@ -1931,7 +1932,7 @@ void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint6
 
 	// We fill up the CQF up to 95% load factor.
 	// This is a very conservative check.
-	
+	std::sort(keys[0], keys[nvals];
 	for (int i = 0; i < nvals; i++) {
 		uint64_t key = keys[i];
 		
