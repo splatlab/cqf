@@ -1927,73 +1927,85 @@ int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
 	return ret;
 }
 
-void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint64_t nvals, uint8_t
+void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint64_t nvals, uint64_t nslots, uint8_t
 	flags) {
-	int tid = 1;
-
-	// We fill up the CQF up to 95% load factor.
-	// This is a very conservative check.
-	//qsort(keys, nvals, sizeof(uint64_t), cmpfunc);
-	for (int i = 0; i < nvals; i++) {
-		uint64_t key = keys[i];
-		
-		//Don't worry about resizing the CQF; it should be set big enough before the start
-		if (qf_get_num_occupied_slots(qf) >= qf->metadata->nslots * 0.95) {
-			if (qf->runtimedata->auto_resize) {
-				if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) < 0)
-				{
-					fprintf(stderr, "Resizing the failed.\n");
-					return;
-				}
-			}
-			else
-				return;
+	int num_threads = 4;
+	uint32_t* blockends;
+	int t_start;
+	int t_end;
+	blockends = (uint32_t*)malloc(num_threads * sizeof(blockends[0]));
+	for (int i = 0; i < num_threads; i++) {
+		blockends[i] = (nvals / num_threads) * (i + 1);
+	}
+	for (int tid = 0; tid < 4; tid++) {
+		if (tid == 0) {
+			t_start = 0;
 		}
-		
-		if (count == 0)
-			return;
-		/*
-		* Hashing has to happen beforethis
-		if (GET_KEY_HASH(flags) != QF_KEY_IS_HASH) {
-			if (qf->metadata->hash_mode == QF_HASH_DEFAULT)
-				key = MurmurHash64A(((void*)&key), sizeof(key), qf->metadata->seed) % qf->metadata->range;
-			else if (qf->metadata->hash_mode == QF_HASH_INVERTIBLE)
-				key = hash_64(key, BITMASK(qf->metadata->key_bits));
-		}
-		*/
-		uint64_t hash = (key << qf->metadata->value_bits) | (value & BITMASK(qf->metadata->value_bits));
-		int ret;
-		if (count == 1)
-			ret = insert1(qf, hash, flags);
-		else
-			ret = insert(qf, hash, count, flags);
+		else t_start = vals[tid - 1];
+		if (tid == num_threads - 1) t_end = nvals;
+		else t_end = blockends[tid];
 
-		// check for fullness based on the distance from the home slot to the slot
-		// in which the key is inserted
-		if (ret == QF_NO_SPACE || ret > DISTANCE_FROM_HOME_SLOT_CUTOFF) {
-			float load_factor = qf_get_num_occupied_slots(qf) /
-				(float)qf->metadata->nslots;
-			fprintf(stdout, "Load factor: %lf\n", load_factor);
-			if (qf->runtimedata->auto_resize) {
-				fprintf(stdout, "Resizing the CQF.\n");
-				if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) > 0)
-				{
-					if (ret == QF_NO_SPACE) {
-						if (count == 1)
-							ret = insert1(qf, hash, flags);
-						else
-							ret = insert(qf, hash, count, flags);
+		for (int i = t_start; i < t_end; i++) {
+			uint64_t key = keys[i];
+
+			//Don't worry about resizing the CQF; it should be set big enough before the start
+			if (qf_get_num_occupied_slots(qf) >= qf->metadata->nslots * 0.95) {
+				if (qf->runtimedata->auto_resize) {
+					if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) < 0)
+					{
+						fprintf(stderr, "Resizing the failed.\n");
+						return;
 					}
-					fprintf(stderr, "Resize finished.\n");
+				}
+				else
+					return;
+			}
+
+			if (count == 0)
+				return;
+			/*
+			* Hashing has to happen beforethis
+			if (GET_KEY_HASH(flags) != QF_KEY_IS_HASH) {
+				if (qf->metadata->hash_mode == QF_HASH_DEFAULT)
+					key = MurmurHash64A(((void*)&key), sizeof(key), qf->metadata->seed) % qf->metadata->range;
+				else if (qf->metadata->hash_mode == QF_HASH_INVERTIBLE)
+					key = hash_64(key, BITMASK(qf->metadata->key_bits));
+			}
+			*/
+			uint64_t hash = (key << qf->metadata->value_bits) | (value & BITMASK(qf->metadata->value_bits));
+			int ret;
+			if (count == 1)
+				ret = insert1(qf, hash, flags);
+			else
+				ret = insert(qf, hash, count, flags);
+
+			// check for fullness based on the distance from the home slot to the slot
+			// in which the key is inserted
+			if (ret == QF_NO_SPACE || ret > DISTANCE_FROM_HOME_SLOT_CUTOFF) {
+				float load_factor = qf_get_num_occupied_slots(qf) /
+					(float)qf->metadata->nslots;
+				fprintf(stdout, "Load factor: %lf\n", load_factor);
+				if (qf->runtimedata->auto_resize) {
+					fprintf(stdout, "Resizing the CQF.\n");
+					if (qf->runtimedata->container_resize(qf, qf->metadata->nslots * 2) > 0)
+					{
+						if (ret == QF_NO_SPACE) {
+							if (count == 1)
+								ret = insert1(qf, hash, flags);
+							else
+								ret = insert(qf, hash, count, flags);
+						}
+						fprintf(stderr, "Resize finished.\n");
+					}
+					else {
+						fprintf(stderr, "Resize failed\n");
+						ret = QF_NO_SPACE;
+					}
 				}
 				else {
-					fprintf(stderr, "Resize failed\n");
+					fprintf(stderr, "The CQF is filling up.\n");
 					ret = QF_NO_SPACE;
 				}
-			}
-			else {
-				fprintf(stderr, "The CQF is filling up.\n");
-				ret = QF_NO_SPACE;
 			}
 		}
 	}
