@@ -27,6 +27,11 @@
 #define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
 #define BITMASK(nbits)((nbits) == 64 ? 0xffffffffffffffff : MAX_VALUE(nbits))
 
+int cmpfunc (const void * a, const void * b) {
+   return ( *(int*)a - *(int*)b );
+}
+
+
 int main(int argc, char **argv)
 {
 	if (argc < 3) {
@@ -57,7 +62,7 @@ int main(int argc, char **argv)
 		abort();
 	}
 
-	qf_set_auto_resize(&qf, true);
+	qf_set_auto_resize(&qf, false);
 	/* Generate random values */
 	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
 	hashes = (uint64_t*)malloc(nvals * sizeof(hashes[0]));
@@ -72,6 +77,9 @@ int main(int argc, char **argv)
 	}
 
 	/* Insert keys in the CQF */
+       //Sort here so the test works
+       //TODO: ask Prashant why this breaks the test (bottom test, prints 'index weirdness')
+//        qsort(vals, nvals, sizeof(uint64_t), cmpfunc);
 
 	qf_insert_gpu(&qf, vals, 0, key_count, nvals, QF_NO_LOCK);
 	/*
