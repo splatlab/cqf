@@ -1201,7 +1201,7 @@ static inline int insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 		uint64_t new_value = hash_remainder;
 
 		/* printf("RUNSTART: %02lx RUNEND: %02lx\n", runstart_index, runend_index); */
-
+		//TODO add case where the shift from previous block is in the way
 		uint64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index- 1) + 1;
 
 		if (is_occupied(qf, hash_bucket_index)) {
