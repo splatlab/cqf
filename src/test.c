@@ -84,7 +84,7 @@ int main(int argc, char **argv)
        //Sort here so the test works
        //TODO: ask Prashant why this breaks the test (bottom test, prints 'index weirdness')
        //printf("sortd\n");
-	qsort(vals, nvals, sizeof(uint64_t), cmpfunc);
+	qsort(vals, nvals, sizeof(vals[0]), cmpfunc);
 	/*for (int i = 0; i<nvals; i++){
 	printf("%u\n", vals[i]);
 	}
