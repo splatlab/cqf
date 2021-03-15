@@ -1941,7 +1941,7 @@ void qf_insert_gpu(QF* qf, uint64_t* keys, uint64_t value, uint64_t count, uint6
 		if (tid == 0) {
 			t_start = 0;
 		}
-		else t_start = vals[tid - 1];
+		else t_start = blockends[tid - 1];
 		if (tid == num_threads - 1) t_end = nvals;
 		else t_end = blockends[tid];
 
