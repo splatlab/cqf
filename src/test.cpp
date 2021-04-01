@@ -75,20 +75,22 @@ int main(int argc, char **argv)
 		/*fake hash until implemented*/
 		//hashes[i] = vals[i];
 	}
-	/*
+	
 	for(int i = 0; i<nvals; i++){
 	printf("%u\n", vals[i]);
 	}
-	*/
+	
 	/* Insert keys in the CQF */
        //Sort here so the test works
        //TODO: ask Prashant why this breaks the test (bottom test, prints 'index weirdness')
-       //printf("sortd\n");
-	qsort(vals, nvals, sizeof(vals[0]), cmpfunc);
-	/*for (int i = 0; i<nvals; i++){
+       printf("sortd\n");
+	//qsort(vals, nvals, sizeof(vals[0]), cmpfunc);
+
+	std::sort(vals, vals + nvals);
+	for (int i = 0; i<nvals; i++){
 	printf("%u\n", vals[i]);
 	}
-	*/
+	
 	qf_insert_gpu(&qf, vals, 0, key_count, nvals, nslots,  QF_NO_LOCK);
 	/*
 	for (uint64_t i = 0; i < nvals; i++) {
