@@ -49,13 +49,13 @@ of select on machine words to work on CPUs older than Haswell.
 To build on a Haswell or newer hardware:
 ```bash
  $ make test
- $ ./test 24
+ $ ./test 24 8
 ```
 
 To build on an older hardware (older than Haswell):
 ```bash
  $ make NH=1 test
- $ ./test 24
+ $ ./test 24 8
  ```
 
  The argument to main is the log of the number of slots in the CQF. For example,
