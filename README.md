@@ -43,7 +43,7 @@ Build
 This library depends on libssl. 
 
 The code uses two new instructions to implement select on machine words introduced 
-in intel's Haswell line of CPUs. However, there is also an alternate implementation
+in Intel's Haswell line of CPUs. However, there is also an alternate implementation
 of select on machine words to work on CPUs older than Haswell.
 
 To build on a Haswell or newer hardware:
