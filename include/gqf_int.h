@@ -74,7 +74,6 @@ extern "C" {
 		uint32_t auto_resize;
 		int64_t (*container_resize)(QF *qf, uint64_t nslots);
 		pc_t pc_nelts;
-		pc_t pc_ndistinct_elts;
 		pc_t pc_noccupied_slots;
 		pc_t pc_n_primitive_tombstones;
 		pc_t pc_n_pushing_tombstones;
@@ -106,7 +105,6 @@ extern "C" {
 		uint64_t nblocks;
 		quotient_filter_iterator rebuild_pos;			// Current rebuild position
 		uint64_t nelts;
-		uint64_t ndistinct_elts;
 		uint64_t noccupied_slots;
 		uint64_t n_primitive_tombstones;
 		uint64_t n_pushing_tombstones;

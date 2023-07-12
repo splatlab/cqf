@@ -80,15 +80,28 @@ extern "C" {
 	 * initialize the CQF.  This function takes ownership of buffer.
 	 */
 	uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, 
-									 uint64_t value_bits, 
-									 uint64_t tombstone_space, uint64_t nrebuilds,
-									 enum qf_hashmode hash, uint32_t seed, void*
-									 buffer, uint64_t buffer_len);
+									 uint64_t value_bits, enum qf_hashmode hash, uint32_t seed, 
+									 void* buffer, uint64_t buffer_len);
+
+	/* Create a CQF in "buffer". Note that this does not initialize the
+	 contents of bufferss Use this function if you have read a CQF, e.g.
+	 off of disk or network, and want to begin using that stream of
+	 bytes as a CQF. The CQF takes ownership of buffer.  */
+	uint64_t qf_use(QF* qf, void* buffer, uint64_t buffer_len);
 
 	/* Destroy this CQF.  Returns a pointer to the memory that the CQF was
 		 using (i.e. passed into qf_init or qf_use) so that the application
 		 can release that memory. */
 	void *qf_destroy(QF *qf);
+
+	/* Allocate a new CQF using "nslots" at "buffer" and copy elements from "qf"
+	 * into it. 
+	 * If there is not enough space at buffer then it will return the total size
+	 * needed in bytes to initialize the new CQF.
+	 * TODO: Otherwise, it will return what?
+	 * */
+	uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t
+										 buffer_len);
 
 	/***********************************
     The following convenience functions create and destroy CQFs by
@@ -101,6 +114,18 @@ extern "C" {
 
 	bool qf_free(QF *qf);
 
+	/* Resize the QF to the specified number of slots.  Uses malloc() to
+	 * obtain the new memory, and calls free() on the old memory.
+	 * Return value:
+	 *    >= 0: number of keys copied during resizing.
+	 * */
+	int64_t qf_resize_malloc(QF *qf, uint64_t nslots);
+
+	/* Turn on automatic resizing.  Resizing is performed by calling
+		 qf_resize_malloc, so the CQF must meet the requirements of that
+		 function. */
+	void qf_set_auto_resize(QF* qf, bool enabled);
+
 	/***********************************
    Functions for modifying the CQF.
 	***********************************/
@@ -109,10 +134,11 @@ extern "C" {
 #define QF_COULDNT_LOCK (-2)
 #define QF_DOESNT_EXIST (-3)
 	
-	/* Insert this key/value pair. 
+	/* Insert this key/value pair.
 	 * Return value:
-	 *    >= 0: distance from the home slot to the slot in which the key is
-	 *          inserted (or 0 if count == 0).
+	 *    == 0: key already exists in the CQF, update the value.
+	 *    == QF_DOESNT_EXIST: Specified key did not exist. Inserted it. It's not
+	 * 											  an error.
 	 *    == QF_NO_SPACE: the CQF has reached capacity.
 	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
@@ -120,46 +146,23 @@ extern "C" {
 
 	/* Remove this key.
 	 * Return value:
-	 *    >= 0: distance from the home slot to the slot in which the key is
-	 *          found.
+	 *    == 0: Found and removed the key.
 	 *    == QF_DOESNT_EXIST: Specified item did not exist.
 	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
 	int qf_remove(QF *qf, uint64_t key, uint8_t flags);
 
-	/* Rebuild the next rebuild intervals (c_r * c_p). 
-		 May return QF_COULDNT_LOCK if called with QF_TRY_ONCE_LOCK.
-	*/
-	int qf_rebuild(const QF *qf, uint8_t flags);
-
 	/****************************************
    Query functions
 	****************************************/
 	
-	/* Lookup the key.  Returns if the key is in the QF.
+	/* Lookup the key.
 	 * Return value:
-	 *    >= 0: distance from the home slot to the slot in which the key is
-	 *          found.
+	 *    == 0: Found the key and filled the value.
 	 *    == QF_DOESNT_EXIST: Specified item did not exist.
 	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
 	int qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags);
-
-	/* Return the number of times key has been inserted, with any value,
-		 into qf. */
-	/* NOT IMPLEMENTED YET. */
-	//uint64_t qf_count_key(const QF *qf, uint64_t key);
-
-	// What is this?
-	/* Returns a unique index corresponding to the key in the CQF.  Note
-		 that this can change if further modifications are made to the
-		 CQF.
-
-		 If the key is not found then returns QF_DOESNT_EXIST.
-		 May return QF_COULDNT_LOCK if called with QF_TRY_ONCE_LOCK.
-	 */
-	int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value, 
-															uint8_t flags);
 
 	/****************************************
    Metadata accessors.
@@ -180,9 +183,6 @@ extern "C" {
 	uint64_t qf_get_num_value_bits(const QF *qf);
 	uint64_t qf_get_num_key_remainder_bits(const QF *qf);
 	uint64_t qf_get_bits_per_slot(const QF *qf);
-
-	/* Number of keys. */
-	uint64_t qf_get_sum_of_counts(const QF *qf);
 
 	void qf_sync_counters(const QF *qf);
 
@@ -248,13 +248,24 @@ extern "C" {
 	 * and dest must be exactly the same, including number of slots.  */
 	void qf_copy(QF *dest, const QF *src);
 
+	/* merge two QFs into the third one. Note: merges with any existing
+		 values in qfc.  */
+	void qf_merge(const QF *qfa, const QF *qfb, QF *qfc);
+
+	/* merge multiple QFs into the final QF one. */
+	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr);
+
+	/* Expose tombstone parameters for performance tests. */
+	uint64_t qf_malloc_advance(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
+								 					value_bits, enum qf_hashmode hash, uint32_t seed,
+										 			uint64_t tombstone_space, uint64_t nrebuilds);
+
 	/***********************************
 		Debugging functions.
 	************************************/
 
 	void qf_dump(const QF *);
 	void qf_dump_metadata(const QF *qf);
-
 
 #ifdef __cplusplus
 }
