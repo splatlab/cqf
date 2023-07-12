@@ -89,20 +89,21 @@ extern "C" {
 	typedef struct quotient_filter_metadata {
 		uint64_t magic_endian_number;
 		enum qf_hashmode hash_mode;
-		uint32_t reserved;
+		uint32_t reserved;					// TODO: what is this?
 		uint64_t total_size_in_bytes;
 		uint32_t seed;
 		uint64_t nslots;
 		uint64_t xnslots;
 		uint64_t tombstone_space;		// Distance between two primitive tombstones.
-		uint64_t nrebuilds;      		// Number of rebuild per loop.
-		uint64_t rebuild_slots;  		// Number of slots to be rebuilt.
+		uint64_t nrebuilds;      		// Number of rebuilds per loop.
+		uint64_t rebuild_slots;  		// Number of slots to be rebuilt each time.
 		uint64_t key_bits;
 		uint64_t value_bits;
 		uint64_t key_remainder_bits;
 		uint64_t bits_per_slot;
 		__uint128_t range;
 		uint64_t nblocks;
+		quotient_filter_iterator next_tombstone;	// Next position to put a tombstone.
 		quotient_filter_iterator rebuild_pos;			// Current rebuild position
 		uint64_t nelts;
 		uint64_t noccupied_slots;
