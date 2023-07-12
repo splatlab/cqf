@@ -256,7 +256,7 @@ extern "C" {
 	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr);
 
 	/* Expose tombstone parameters for performance tests. */
-	uint64_t qf_malloc_advance(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
+	bool qf_malloc_advance(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 								 					value_bits, enum qf_hashmode hash, uint32_t seed,
 										 			uint64_t tombstone_space, uint64_t nrebuilds);
 
