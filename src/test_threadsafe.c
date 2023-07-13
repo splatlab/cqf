@@ -19,12 +19,10 @@
 
 #include "include/gqf.h"
 #include "include/gqf_int.h"
-#include "include/gqf_file.h"
 
 typedef struct insert_args {
 	QF *cf;
 	uint64_t *vals;
-	int freq;
 	uint64_t start;
 	uint64_t end;
 } insert_args;
@@ -33,10 +31,9 @@ void *insert_bm(void *arg)
 {
 	insert_args *a = (insert_args *)arg;
 	for (uint32_t i = a->start; i <= a->end; i++) {
-		int ret = qf_insert(a->cf, a->vals[i], 0, a->freq, QF_WAIT_FOR_LOCK);
+		int ret = qf_insert(a->cf, a->vals[i], 0, QF_WAIT_FOR_LOCK);
 		if (ret < 0) {
-			fprintf(stderr, "failed insertion for key: %lx %d.\n", a->vals[i],
-							a->freq);
+			fprintf(stderr, "failed insertion for key: %lx.\n", a->vals[i]);
 			if (ret == -1)
 				fprintf(stderr, "CQF is full.\n");
 			else if (ret == -2)
@@ -108,7 +105,6 @@ int main(int argc, char **argv)
 	for (uint32_t i = 0; i < tcnt; i++) {
 		args[i].cf = &cfr;
 		args[i].vals = vals;
-		args[i].freq = freq;
 		args[i].start = (nvals/tcnt) * i;
 		args[i].end = (nvals/tcnt) * (i + 1) - 1;
 	}
@@ -132,7 +128,7 @@ int main(int argc, char **argv)
 	qf_iterator_from_position(&cfr, &cfir, 0);
 	do {
 		uint64_t key, value, count;
-		qfi_get_key(&cfir, &key, &value, &count);
+		qfi_get_key(&cfir, &key, &value);
 		qfi_next(&cfir);
 		if (qf_count_key_value(&cfr, key, 0, 0) < freq) {
 			fprintf(stderr, "Failed lookup during iteration for: %lx. Returned count: %ld\n",
@@ -141,8 +137,8 @@ int main(int argc, char **argv)
 		}
 	} while(!qfi_end(&cfir));
 
-	fprintf(stdout, "Total num of distinct items in the CQF %ld\n",
-					cfr.metadata->ndistinct_elts);
+	fprintf(stdout, "Total num of items in the CQF %ld\n",
+					cfr.metadata->nelts);
 	fprintf(stdout, "Verified all items: %ld\n", args[tcnt-1].end);
 
 	return 0;

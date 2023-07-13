@@ -163,7 +163,12 @@ extern "C" {
 	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
 	int qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags);
-
+	
+	/* Return the number of times key has been inserted, with the given
+		 value, into qf.
+		 May return QF_COULDNT_LOCK if called with QF_TRY_LOCK.  */
+	uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value,
+															uint8_t flags);
 	/****************************************
    Metadata accessors.
 	****************************************/
@@ -255,7 +260,10 @@ extern "C" {
 	/* merge multiple QFs into the final QF one. */
 	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr);
 
-	/* Expose tombstone parameters for performance tests. */
+	/* Expose tombstone parameters for performance tests. 
+	 * When use 0 for tombstone_space and/or nrebuilds, the default values will
+	 * be calculated base on the load factor.
+   */
 	bool qf_malloc_advance(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
 								 					value_bits, enum qf_hashmode hash, uint32_t seed,
 										 			uint64_t tombstone_space, uint64_t nrebuilds);
