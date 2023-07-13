@@ -103,8 +103,8 @@ extern "C" {
 		uint64_t bits_per_slot;
 		__uint128_t range;
 		uint64_t nblocks;
-		quotient_filter_iterator next_tombstone;	// Next position to put a tombstone.
-		quotient_filter_iterator rebuild_pos;			// Current rebuild position
+		uint64_t next_tombstone;	// Next position to put a tombstone.
+		uint64_t rebuild_pos;			// Current rebuild position
 		uint64_t nelts;
 		uint64_t noccupied_slots;
 		uint64_t n_primitive_tombstones;
