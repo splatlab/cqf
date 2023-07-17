@@ -1190,8 +1190,8 @@ inline static int _remove(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 	if (!is_occupied(qf, hash_bucket_index))
 		return QF_DOESNT_EXIST;
 
-	uint64_t original_runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
-	uint64_t remainder_index = original_runstart_index;
+	uint64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
+	uint64_t remainder_index = runstart_index;
 	int only_item_in_the_run = 0;
 
 	current_remainder = get_slot(qf, remainder_index);
@@ -1204,7 +1204,7 @@ inline static int _remove(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 		return QF_DOESNT_EXIST;
 	
 	/* Now runstart_index */
-	if (original_runstart_index == remainder_index && is_runend(qf, remainder_index))
+	if (runstart_index == remainder_index && is_runend(qf, remainder_index))
 		only_item_in_the_run = 1;
 
 	/* endode the new counter */
