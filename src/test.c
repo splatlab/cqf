@@ -169,6 +169,13 @@ int main(int argc, char **argv)
 			dump_key(keys[i]);
 			abort();
 		}
+		/* Removing a key that was just removed should return QF_DOESNT_EXIST */
+		ret = qf_remove(&qf, keys[i], QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret != QF_DOESNT_EXIST) {
+			fprintf(stderr, "Did not delete key %ld\n", keys[i]);
+			abort();
+		}
+
 		uint64_t val;
 		/* Query that keys are deleted in the CQF */
 		ret = qf_query(&qf, keys[i], &val, QF_NO_LOCK | QF_KEY_IS_HASH);
