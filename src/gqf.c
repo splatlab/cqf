@@ -1106,7 +1106,7 @@ static inline int insert(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 
 				/* If the remainder exists. */
 			} else {
-				// set_slot(qf, insert_index, hash_remainder);
+				return QF_KEY_EXISTS;
 			}
 		}
 

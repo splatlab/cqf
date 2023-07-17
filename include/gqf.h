@@ -133,6 +133,7 @@ extern "C" {
 #define QF_NO_SPACE (-1)
 #define QF_COULDNT_LOCK (-2)
 #define QF_DOESNT_EXIST (-3)
+#define QF_KEY_EXISTS (-4)
 	
 	/* Insert this key/value pair.
 	 * Return value:

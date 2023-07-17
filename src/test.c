@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 	}
 
 	// TODO(chesetti): Enable auto resize once implemented.
-	// qf_set_auto_resize(&qf, true);
+	qf_set_auto_resize(&qf, true);
 
 	/* Generate random values */
 	keys = (uint64_t*)malloc(nvals*sizeof(vals[0]));
@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 	for (uint64_t i = 0; i < nvals; i++) {
 		int ret = qf_insert(&qf, keys[i], vals[i], QF_NO_LOCK | QF_KEY_IS_HASH);
 		if (ret < 0) {
-			fprintf(stderr, "failed insertion for key: %lxd.\n", keys[i]);
+			fprintf(stderr, "failed insertion for key: %lx.\n", keys[i]);
 			if (ret == QF_NO_SPACE)
 				fprintf(stderr, "CQF is full.\n");
 			else if (ret == QF_COULDNT_LOCK)
@@ -84,6 +84,11 @@ int main(int argc, char **argv)
 			else
 				fprintf(stderr, "Does not recognise return value.\n");
 			abort();
+		}
+		// inserting again should return QF_KEY_EXISTS
+		ret = qf_insert(&qf, keys[i], vals[i], QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret != QF_KEY_EXISTS) {
+			fprintf(stderr, "Inserting a key again did not return QF_KEY_EXISTS: %lx.\n", keys[i]);
 		}
 	}
 
