@@ -1,5 +1,7 @@
 TARGETS=test test_threadsafe test_pc bm
 
+D=1
+
 ifdef D
 	DEBUG=-g
 	OPT=

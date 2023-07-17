@@ -1190,36 +1190,32 @@ inline static int _remove(QF *qf, __uint128_t hash, uint8_t runtime_lock)
 	if (!is_occupied(qf, hash_bucket_index))
 		return -1;
 
-	uint64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
-	uint64_t original_runstart_index = runstart_index;
+	uint64_t original_runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
+	uint64_t remainder_index = original_runstart_index;
 	int only_item_in_the_run = 0;
 
-	/*Find the counter for this remainder, if one exists.*/
-	current_end = runstart_index;
-	current_remainder = get_slot(qf, current_end);
-	while (current_remainder < hash_remainder && !is_runend(qf, current_end)) {
-		runstart_index = current_end + 1;
-		current_end = runstart_index;
+	current_remainder = get_slot(qf, remainder_index);
+	while (current_remainder < hash_remainder && !is_runend(qf, remainder_index)) {
+		remainder_index = remainder_index + 1;
+		current_remainder = get_slot(qf, remainder_index);
 	}
 	/* remainder not found in the given run */
 	if (current_remainder != hash_remainder)
 		return -1;
 	
-	/* now runstart_index is the start of the given remainder
-	current_end is the end of the given remainder */
-
-	if (original_runstart_index == runstart_index && is_runend(qf, current_end))
+	/* Now runstart_index */
+	if (original_runstart_index == remainder_index && is_runend(qf, remainder_index))
 		only_item_in_the_run = 1;
 
 	/* endode the new counter */
-	uint64_t *p = &hash_remainder;
+	uint64_t *p = 0x00; // The New Counter length is 0.
 	ret_numfreedslots = remove_replace_slots_and_shift_remainders_and_runends_and_offsets(qf,
 																																		only_item_in_the_run,
 																																		hash_bucket_index,
-																																		runstart_index,
+																																		remainder_index,
 																																		p,
-																																		&new_values[67] - p,
-																																		current_end - runstart_index + 1);
+																																		0,
+																																		1);
 
 	// update the nelements.
 	modify_metadata(&qf->runtimedata->pc_nelts, -1);
@@ -1684,8 +1680,9 @@ int qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags)
 	uint64_t hash_remainder   = hash & BITMASK(qf->metadata->key_remainder_bits);
 	int64_t hash_bucket_index = hash >> qf->metadata->key_remainder_bits;
 
-	if (!is_occupied(qf, hash_bucket_index))
-		return 0;
+	if (!is_occupied(qf, hash_bucket_index)) {
+		return QF_DOESNT_EXIST;
+	}
 
 	int64_t runstart_index = hash_bucket_index == 0 ? 0 : run_end(qf,
 																																hash_bucket_index-1)
@@ -1702,12 +1699,12 @@ int qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags)
 		*value = current_remainder & BITMASK(qf->metadata->value_bits);
 		current_remainder = current_remainder >> qf->metadata->value_bits;
 		if (current_remainder == hash_remainder) {
-			return current_count;
+			return 1;
 		}
 		runstart_index = current_end + 1;
 	} while (!is_runend(qf, current_end));
 
-	return 0;
+	return QF_DOESNT_EXIST;
 }
 
 int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value,
