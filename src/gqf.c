@@ -30,6 +30,7 @@
 
 #define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
 #define BITMASK(nbits) ((nbits) == 64 ? 0xffffffffffffffff : MAX_VALUE(nbits))
+#define NBITMASK(nbits) (~BITMASK(nbits))
 #define NUM_SLOTS_TO_LOCK (1ULL << 16)
 #define CLUSTER_SIZE (1ULL << 14)
 #define METADATA_WORD(qf, field, slot_index)                                   \
