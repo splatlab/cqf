@@ -116,8 +116,10 @@ int main(int argc, char **argv)
 	fprintf(stdout, "Testing inserts.\n");
 	for (uint64_t i = 0; i < nvals; i++) {
 		int ret = qf_insert(&qf, keys[i], vals[i], QF_NO_LOCK | QF_KEY_IS_HASH);
-		if (ret < 0) {
-			fprintf(stderr, "failed insertion for key: %lx.\n", keys[i]);
+		if (ret == QF_KEY_EXISTS)
+			fprintf(stdout, "Inserting existing key: %lx.\n", keys[i]);
+		else if (ret < 0) {
+			fprintf(stderr, "failed insertion for key: %lx, returned %d.\n", keys[i], ret);
 			if (ret == QF_NO_SPACE)
 				fprintf(stderr, "CQF is full.\n");
 			else if (ret == QF_COULDNT_LOCK)
@@ -146,7 +148,6 @@ int main(int argc, char **argv)
 	for (uint64_t i = 0; i < nvals; i++) {
 		uint64_t val;
 		int ret = qf_query(&qf, keys[i], &val, QF_NO_LOCK | QF_KEY_IS_HASH);
-		fprintf(stdout, "query for key: %lx returned %d\n", keys[i], ret);
 		if (ret == QF_DOESNT_EXIST) {
 			fprintf(stderr, "failed query for key: %lx\n", keys[i]);
 			abort();
@@ -202,7 +203,9 @@ int main(int argc, char **argv)
 	fprintf(stdout, "Testing remove/delete_key.\n");
 	for (uint64_t i = 0; i < nvals; i++) {
 		int ret = qf_remove(&qf, keys[i], QF_NO_LOCK | QF_KEY_IS_HASH);
-		if (ret < 0) {
+		if (ret == QF_DOESNT_EXIST) 
+			fprintf(stdout, "Removing duplicated key: %lx.\n", keys[i]);
+		else if (ret < 0) {
 			fprintf(stderr, "failed deletion for ret code: %d.\n", ret);
 			dump_key(keys[i]);
 			abort();
