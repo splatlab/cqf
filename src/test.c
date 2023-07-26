@@ -22,8 +22,13 @@
 #include "include/gqf.h"
 #include "include/gqf_int.h"
 
+#include <unistd.h>
+#include <fcntl.h>
+
 #define KEY_SIZE_BITS 64
 #define VAL_SIZE_BITS 0
+
+const char *input_backup = "test_data";
 
 void dump_key(uint64_t key) {
 	char *k = (char *)(&key) + 7;
@@ -35,14 +40,43 @@ void dump_key(uint64_t key) {
 	printf("\n");
 }
 
+void write_kv_to_backup(uint64_t *keys, uint64_t *vals, uint64_t count) {
+	int fd = open(input_backup, O_WRONLY | O_CREAT, 0644);
+	uint64_t bytes_written = 0;
+	uint64_t total_bytes_to_write = count * sizeof(uint64_t);
+	printf("%ld\n", total_bytes_to_write);
+	while (bytes_written < total_bytes_to_write) {
+		bytes_written += pwrite(fd, keys + bytes_written, total_bytes_to_write - bytes_written, bytes_written);
+	}
+	bytes_written = 0;
+	while (bytes_written < total_bytes_to_write) {
+		bytes_written += pwrite(fd, vals  + bytes_written, total_bytes_to_write - bytes_written, bytes_written + total_bytes_to_write);
+	}
+	close(fd);
+}
+void read_kv_from_backup(uint64_t *keys, uint64_t *vals, uint64_t count) {
+	int fd = open(input_backup, O_RDONLY);
+	uint64_t bytes_read = 0;
+	uint64_t total_bytes_to_read = count * sizeof(uint64_t);
+	while (bytes_read < total_bytes_to_read) {
+		bytes_read += pread(fd, keys + bytes_read, total_bytes_to_read - bytes_read, bytes_read);
+	}
+	bytes_read = 0;
+	while (bytes_read < total_bytes_to_read) {
+		bytes_read += pread(fd, vals + bytes_read, total_bytes_to_read - bytes_read, bytes_read + total_bytes_to_read);
+	}
+	close(fd);
+}
+
 int main(int argc, char **argv)
 {
-	if (argc < 2) {
-		fprintf(stderr, "Please specify the log of the number of slots.\n");
+	if (argc < 3) {
+		fprintf(stderr, "Please specify the log of the number of slots and whether to replay.\n");
 		exit(1);
 	}
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
+	int replay = atoi(argv[2]);
 	uint64_t rbits = KEY_SIZE_BITS - qbits;
 	uint64_t vbits = VAL_SIZE_BITS;
 	uint64_t nslots = (1ULL << qbits);
@@ -67,9 +101,14 @@ int main(int argc, char **argv)
 	/* Generate random values */
 	keys = (uint64_t*)malloc(nvals*sizeof(vals[0]));
 	vals = (uint64_t*)malloc(nvals*sizeof(keys[0]));
-	RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
-	RAND_bytes((unsigned char *)keys, sizeof(*keys) * nvals);
-	srand(0);
+	if (replay) {
+		printf("Replaying!");
+		read_kv_from_backup(keys, vals, nvals);
+	} else {
+		RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
+		RAND_bytes((unsigned char *)keys, sizeof(*keys) * nvals);
+		write_kv_to_backup(keys, vals, nvals);
+	}
 
 	/* Insert keys in the CQF */
 	fprintf(stdout, "Testing inserts.\n");
