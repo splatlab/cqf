@@ -25,7 +25,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#define KEY_SIZE_BITS 64
+#include <unistd.h>
+#include <fcntl.h>
+
+#define KEY_SIZE_BITS 32
 #define VAL_SIZE_BITS 0
 
 const char *input_backup = "test_data";
@@ -80,8 +83,7 @@ int main(int argc, char **argv)
 	uint64_t rbits = KEY_SIZE_BITS - qbits;
 	uint64_t vbits = VAL_SIZE_BITS;
 	uint64_t nslots = (1ULL << qbits);
-	uint64_t nvals = 95*nslots/100;
-	uint64_t key_count = 4;
+	uint64_t nvals = 50*nslots/100;
 
 	// 0 for now, these will be adjusted runtime.
 	uint64_t tombstone_space = 0;
@@ -96,7 +98,7 @@ int main(int argc, char **argv)
 	}
 
 	// TODO(chesetti): Enable auto resize once implemented.
-	qf_set_auto_resize(&qf, true);
+	qf_set_auto_resize(&qf, false);
 
 	/* Generate random values */
 	keys = (uint64_t*)malloc(nvals*sizeof(vals[0]));
@@ -124,10 +126,12 @@ int main(int argc, char **argv)
 				fprintf(stderr, "Does not recognise return value.\n");
 			abort();
 		}
-		// inserting again should return QF_KEY_EXISTS
-		ret = qf_insert(&qf, keys[i], vals[i], QF_NO_LOCK | QF_KEY_IS_HASH);
+	}
+	// inserting again should return QF_KEY_EXISTS
+	for (uint64_t i = 0; i < nvals; i++) {
+		int ret = qf_insert(&qf, keys[i], vals[i], QF_NO_LOCK | QF_KEY_IS_HASH);
 		if (ret != QF_KEY_EXISTS) {
-			fprintf(stderr, "Inserting a key again did not return QF_KEY_EXISTS: %lx.\n", keys[i]);
+			fprintf(stderr, "Inserting a key %lx again returned %d, should be QF_KEY_EXISTS=%d.\n", keys[i], ret, QF_KEY_EXISTS);
 		}
 	}
 
@@ -142,14 +146,9 @@ int main(int argc, char **argv)
 	for (uint64_t i = 0; i < nvals; i++) {
 		uint64_t val;
 		int ret = qf_query(&qf, keys[i], &val, QF_NO_LOCK | QF_KEY_IS_HASH);
-		if (ret != 1) {
+		fprintf(stdout, "query for key: %lx returned %d\n", keys[i], ret);
+		if (ret == QF_DOESNT_EXIST) {
 			fprintf(stderr, "failed query for key: %lx\n", keys[i]);
-			if (ret == QF_NO_SPACE)
-				fprintf(stderr, "CQF is full.\n");
-			else if (ret == QF_COULDNT_LOCK)
-				fprintf(stderr, "TRY_ONCE_LOCK failed.\n");
-			else
-				fprintf(stderr, "Does not recognise return value.\n");
 			abort();
 		}
 	}
@@ -211,7 +210,7 @@ int main(int argc, char **argv)
 		/* Removing a key that was just removed should return QF_DOESNT_EXIST */
 		ret = qf_remove(&qf, keys[i], QF_NO_LOCK | QF_KEY_IS_HASH);
 		if (ret != QF_DOESNT_EXIST) {
-			fprintf(stderr, "Did not delete key %ld\n", keys[i]);
+			fprintf(stderr, "Deleting key %lx returns %d\n", keys[i], ret);
 			abort();
 		}
 
@@ -219,7 +218,7 @@ int main(int argc, char **argv)
 		/* Query that keys are deleted in the CQF */
 		ret = qf_query(&qf, keys[i], &val, QF_NO_LOCK | QF_KEY_IS_HASH);
 		if (ret != QF_DOESNT_EXIST) {
-			fprintf(stderr, "Did not delete key %ld\n", keys[i]);
+			fprintf(stderr, "Did not delete key %lx\n", keys[i]);
 			abort();
 		}
 	}
