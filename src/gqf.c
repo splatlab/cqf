@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include "gqf.h"
+#include "rhm.h"
 #include "gqf_int.h"
 #include "hashutil.h"
 
@@ -528,6 +529,10 @@ static inline uint64_t get_slot(const QF *qf, uint64_t index) {
       BITMASK(qf->metadata->bits_per_slot));
 }
 
+static inline uint64_t get_slot_remainder(const QF *qf, uint64_t index) {
+  return get_slot(qf, index )>> (qf->metadata->value_bits);
+}
+
 static inline void set_slot(const QF *qf, uint64_t index, uint64_t value) {
   assert(index < qf->metadata->xnslots);
   /* Should use __uint128_t to support up to 64-bit remainders, but gcc seems
@@ -712,6 +717,33 @@ static inline void shift_remainders(QF *qf, const uint64_t start_index,
 }
 
 #endif
+static inline void qf_dump_block_long(const QF *qf, uint64_t i) {
+  uint64_t j, k;
+
+#if QF_BITS_PER_SLOT == 8 || QF_BITS_PER_SLOT == 16 || QF_BITS_PER_SLOT == 32
+  for (j = 0; j < QF_SLOTS_PER_BLOCK; j++)
+    printf("%02x ", get_block(qf, i)->slots[j]);
+#elif QF_BITS_PER_SLOT == 64
+  for (j = 0; j < QF_SLOTS_PER_BLOCK; j++)
+    printf("%02lx ", get_block(qf, i)->slots[j]);
+#else
+printf("BL O R V\n");
+  for (j = 0; j < QF_SLOTS_PER_BLOCK;  j++) {
+    printf("%02lx", j); // , get_block(qf, i)->slots[j]);
+    printf(" %d",
+           (get_block(qf, i)->occupieds[j / 64] & (1ULL << (j % 64))) ? 1 : 0);
+    printf(" %d ",
+           (get_block(qf, i)->runends[j / 64] & (1ULL << (j % 64))) ? 1 : 0);
+    uint64_t slot = i * QF_SLOTS_PER_BLOCK + j;
+    if (slot < qf->metadata->xnslots) {
+      printf("%" PRIx64, get_slot(qf, i*QF_SLOTS_PER_BLOCK + j));
+    } else {
+      printf("-");
+    }
+    printf("\n");
+  }
+}
+#endif
 
 static inline void qf_dump_block(const QF *qf, uint64_t i) {
   uint64_t j;
@@ -769,6 +801,17 @@ void qf_dump(const QF *qf) {
     qf_dump_block(qf, i);
   }
 }
+void qf_dump_long(const QF *qf) {
+  uint64_t i;
+
+  printf("%lu %lu %lu\n", qf->metadata->nblocks, qf->metadata->ndistinct_elts,
+         qf->metadata->nelts);
+
+  for (i = 0; i < qf->metadata->nblocks; i++) {
+    qf_dump_block_long(qf, i);
+  }
+}
+
 
 static inline void find_next_n_empty_slots(QF *qf, uint64_t from, uint64_t n,
                                            uint64_t *indices) {
@@ -1713,10 +1756,12 @@ void *qf_destroy(QF *qf) {
 
 bool qf_malloc(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t value_bits,
                enum qf_hashmode hash, uint32_t seed) {
+
   uint64_t total_num_bytes =
       qf_init(qf, nslots, key_bits, value_bits, hash, seed, NULL, 0);
 
   void *buffer = malloc(total_num_bytes);
+  memset(buffer, 0, total_num_bytes);
   if (buffer == NULL) {
     perror("Couldn't allocate memory for the CQF.");
     exit(EXIT_FAILURE);
@@ -2551,3 +2596,236 @@ void qf_intersect(const QF *qfa, const QF *qfb, QF *qfr) {
 
 /* magnitude of a QF. */
 uint64_t qf_magnitude(const QF *qf) { return sqrt(qf_inner_product(qf, qf)); }
+
+/******************************************************************
+ * Robinhood Hashmap *
+ ******************************************************************/
+
+typedef struct quotient_filter robinhood_hashmap;
+typedef robinhood_hashmap RHM;
+
+uint64_t rhm_init(RHM *rhm, uint64_t nslots, uint64_t key_bits,
+                  uint64_t value_bits, enum qf_hashmode hash, uint32_t seed,
+                  void *buffer, uint64_t buffer_len) {
+  return qf_init(rhm, nslots, key_bits, value_bits, hash, seed, buffer, buffer_len);
+}
+
+bool rhm_malloc(RHM *rhm, uint64_t nslots, uint64_t key_bits,
+                uint64_t value_bits, enum qf_hashmode hash, uint32_t seed) {
+  return qf_malloc(rhm, nslots, key_bits, value_bits, hash, seed);
+}
+
+void rhm_destroy(RHM *rhm) {
+  qf_destroy(rhm);
+}
+
+bool rhm_free(RHM *rhm) {
+  return qf_free(rhm);
+}
+
+static inline int rhm_insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock) {
+  int ret_distance = 0;
+  uint64_t hash_slot_value = (hash & BITMASK(qf->metadata->bits_per_slot));
+  uint64_t hash_remainder = hash_slot_value >> qf->metadata->value_bits;
+  uint64_t hash_bucket_index = hash >> qf->metadata->bits_per_slot;
+  uint64_t hash_bucket_block_offset = hash_bucket_index % QF_SLOTS_PER_BLOCK;
+  if (GET_NO_LOCK(runtime_lock) != QF_NO_LOCK) {
+    if (!qf_lock(qf, hash_bucket_index, /*small*/ true, runtime_lock))
+      return QF_COULDNT_LOCK;
+  }
+
+  if (is_empty(qf, hash_bucket_index) /* might_be_empty(qf, hash_bucket_index) && runend_index == hash_bucket_index */) {
+    METADATA_WORD(qf, runends, hash_bucket_index) |=
+        1ULL << (hash_bucket_block_offset % 64);
+    set_slot(qf, hash_bucket_index, hash_slot_value);
+    METADATA_WORD(qf, occupieds, hash_bucket_index) |=
+        1ULL << (hash_bucket_block_offset % 64);
+    ret_distance = 0;
+    modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
+    modify_metadata(&qf->runtimedata->pc_nelts, 1);
+  } else {
+    uint64_t runend_index = run_end(qf, hash_bucket_index);
+    int operation = 0; /* Insert into empty bucket */
+    uint64_t insert_index = runend_index + 1;
+    uint64_t new_value = hash_slot_value;
+    uint64_t runstart_index =
+        hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
+    if (is_occupied(qf, hash_bucket_index)) {
+      uint64_t current_remainder = get_slot_remainder(qf, runstart_index);
+      while (current_remainder < hash_remainder && runstart_index <= runend_index) {
+        runstart_index++;
+        /* This may read past the end of the run, but the while loop
+                 condition will prevent us from using the invalid result in
+                 that case. */
+        current_remainder = get_slot_remainder(qf, runstart_index);
+      }
+      /* If this is the first time we've inserted the new remainder,
+               and it is larger than any remainder in the run. */
+      if (runstart_index > runend_index) {
+        operation = 1;
+        insert_index = runstart_index;
+        new_value = hash_slot_value;
+        modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+      /* Replace the current slot with this new hash. Don't shift anything. */
+      } else if (current_remainder == hash_remainder) {
+        operation = -1;
+        insert_index = runstart_index;
+        new_value = hash_slot_value;
+        set_slot(qf, insert_index, new_value);
+      /* First time we're inserting this remainder, but there are 
+          are larger remainders in the run. */
+      } else {
+        operation = 2; /* Inserting */
+        insert_index = runstart_index;
+        new_value = hash_slot_value;
+        modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+      }
+    } else {
+        modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
+    }
+    if (operation >= 0) {
+      uint64_t empty_slot_index = find_first_empty_slot(qf, runend_index + 1);
+      if (empty_slot_index >= qf->metadata->xnslots) {
+        return QF_NO_SPACE;
+      }
+      shift_remainders(qf, insert_index, empty_slot_index);
+      set_slot(qf, insert_index, new_value);
+      ret_distance = insert_index - hash_bucket_index;
+
+      shift_runends(qf, insert_index, empty_slot_index - 1, 1);
+
+      switch (operation) {
+      case 0:
+        METADATA_WORD(qf, runends, insert_index) |=
+            1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64);
+        break;
+      case 1:
+        METADATA_WORD(qf, runends, insert_index - 1) &=
+            ~(1ULL << (((insert_index - 1) % QF_SLOTS_PER_BLOCK) % 64));
+        METADATA_WORD(qf, runends, insert_index) |=
+            1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64);
+        break;
+      case 2:
+        METADATA_WORD(qf, runends, insert_index) &=
+            ~(1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64));
+        break;
+      default:
+        fprintf(stderr, "Invalid operation %d\n", operation);
+        abort();
+      }
+      /*
+       * Increment the offset for each block between the hash bucket index
+       * and block of the empty slot
+       * */
+      uint64_t i;
+      for (i = hash_bucket_index / QF_SLOTS_PER_BLOCK + 1;
+           i <= empty_slot_index / QF_SLOTS_PER_BLOCK; i++) {
+        if (get_block(qf, i)->offset <
+            BITMASK(8 * sizeof(qf->blocks[0].offset)))
+          get_block(qf, i)->offset++;
+        assert(get_block(qf, i)->offset != 0);
+      }
+      modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
+      modify_metadata(&qf->runtimedata->pc_nelts, 1);
+    }
+    METADATA_WORD(qf, occupieds, hash_bucket_index) |=
+        1ULL << (hash_bucket_block_offset % 64);
+  }
+  if (GET_NO_LOCK(runtime_lock) != QF_NO_LOCK) {
+    qf_unlock(qf, hash_bucket_index, /*small*/ true);
+  }
+  return ret_distance;
+}
+
+int rhm_insert(RHM *qf, uint64_t key, uint64_t value, uint8_t flags) {
+  if (qf_get_num_occupied_slots(qf) >= qf->metadata->nslots * 0.99) {
+    return QF_NO_SPACE;
+  }
+  if (GET_KEY_HASH(flags) != QF_KEY_IS_HASH) {
+    fprintf(stderr, "RobinHood HM assumes key is hash for now.");
+    abort();
+  }
+  uint64_t hash = key;
+  hash = (hash<< qf->metadata->value_bits) |
+                  (value & BITMASK(qf->metadata->value_bits));
+  return rhm_insert1(qf, hash, flags);
+}
+
+int rhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
+  if (GET_KEY_HASH(flags) != QF_KEY_IS_HASH) {
+    fprintf(stderr, "RobinHood HM assumes key is hash for now.");
+    abort();
+  }
+  uint64_t hash = key;
+  uint64_t hash_remainder = hash & BITMASK(qf->metadata->key_remainder_bits);
+  int64_t hash_bucket_index = hash >> qf->metadata->key_remainder_bits;
+
+  if (GET_NO_LOCK(flags) != QF_NO_LOCK) {
+		if (!qf_lock(qf, hash_bucket_index, /*small*/ false, flags))
+			return QF_COULDNT_LOCK;
+	}
+
+  /* Empty bucket */
+  if (!is_occupied(qf, hash_bucket_index))
+    return QF_DOESNT_EXIST;
+
+  uint64_t runstart_index =
+      hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
+  uint64_t original_runstart_index = runstart_index;
+  int only_item_in_the_run = 0;
+  uint64_t current_index = runstart_index;
+  uint64_t current_remainder = get_slot_remainder(qf, current_index);
+  while (current_remainder < hash_remainder && !is_runend(qf, current_index)) {
+    	current_index = current_index + 1;
+		  current_remainder = get_slot_remainder(qf, current_index);
+  }
+	if (current_remainder != hash_remainder)
+		return QF_DOESNT_EXIST;
+
+  if (runstart_index == current_index && is_runend(qf, current_index))
+		only_item_in_the_run = 1;
+  uint64_t *p = 0x00; // The New Counter length is 0.
+  int ret_numfreedslots = remove_replace_slots_and_shift_remainders_and_runends_and_offsets(qf,
+																																		only_item_in_the_run,
+																																		hash_bucket_index,
+																																		current_index,
+																																		p,
+																																		0,
+																																		1);
+  modify_metadata(&qf->runtimedata->pc_nelts, -1);
+	if (GET_NO_LOCK(flags) != QF_NO_LOCK) {
+		qf_unlock(qf, hash_bucket_index, /*small*/ false);
+	}
+	return ret_numfreedslots;
+
+}
+
+int rhm_lookup(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags) {
+  if (GET_KEY_HASH(flags) != QF_KEY_IS_HASH) {
+    fprintf(stderr, "RobinHood HM assumes key is hash for now.");
+    abort();
+  }
+  uint64_t hash = key;
+  uint64_t hash_remainder = hash & BITMASK(qf->metadata->key_remainder_bits);
+  int64_t hash_bucket_index = hash >> qf->metadata->key_remainder_bits;
+  if (!is_occupied(qf, hash_bucket_index))
+    return QF_DOESNT_EXIST;
+
+  int64_t runstart_index =
+      hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
+  if (runstart_index < hash_bucket_index)
+    runstart_index = hash_bucket_index;
+
+  uint64_t current_slot_value, current_index, current_remainder, current_value;
+  current_index = runstart_index;
+  do {
+    current_slot_value = get_slot(qf, current_index);
+    current_remainder = current_slot_value >> qf->metadata->value_bits;
+    if (current_remainder == hash_remainder) {
+      *value = current_slot_value & BITMASK(qf->metadata->value_bits);
+      return (current_index - runstart_index + 1);
+    }
+    current_index++;
+  } while (!is_runend(qf, current_index - 1));
+  return QF_DOESNT_EXIST;
+}

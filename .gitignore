@@ -7,3 +7,10 @@
 main
 bm
 hm_churn
+rhm-exists-lookup.txt
+rhm-false-lookup.txt
+rhm-insert.txt
+rhm-churn.txt
+plot_churn.png
+plot_insert.png
+.vscode/settings.json

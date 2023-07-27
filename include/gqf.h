@@ -323,6 +323,7 @@ extern "C" {
 	************************************/
 
 	void qf_dump(const QF *);
+	void qf_dump_long(const QF *);
 	void qf_dump_metadata(const QF *qf);
 
 
