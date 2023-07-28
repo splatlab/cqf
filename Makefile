@@ -1,5 +1,7 @@
 TARGETS=test test_threadsafe test_pc bm
 
+D=1
+
 ifdef D
 	DEBUG=-g
 	OPT=
@@ -39,29 +41,29 @@ all: $(TARGETS)
 
 # dependencies between programs and .o files
 
-test:								$(OBJDIR)/test.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o \
+test:								$(OBJDIR)/test.o $(OBJDIR)/gqf.o \
 										$(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 
 test_threadsafe:		$(OBJDIR)/test_threadsafe.o $(OBJDIR)/gqf.o \
-										$(OBJDIR)/gqf_file.o $(OBJDIR)/hashutil.o \
+										$(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 
 test_pc:						$(OBJDIR)/test_partitioned_counter.o $(OBJDIR)/gqf.o \
-										$(OBJDIR)/gqf_file.o $(OBJDIR)/hashutil.o \
+										$(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 
-bm:									$(OBJDIR)/bm.o $(OBJDIR)/gqf.o $(OBJDIR)/gqf_file.o \
+bm:									$(OBJDIR)/bm.o $(OBJDIR)/gqf.o \
 										$(OBJDIR)/zipf.o $(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 
 # dependencies between .o files and .h files
 
-$(OBJDIR)/test.o: 						$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/gqf_file.h \
+$(OBJDIR)/test.o: 						$(LOC_INCLUDE)/gqf.h \
 															$(LOC_INCLUDE)/hashutil.h \
 															$(LOC_INCLUDE)/partitioned_counter.h
 
-$(OBJDIR)/test_threadsafe.o: 	$(LOC_INCLUDE)/gqf.h $(LOC_INCLUDE)/gqf_file.h \
+$(OBJDIR)/test_threadsafe.o: 	$(LOC_INCLUDE)/gqf.h \
 															$(LOC_INCLUDE)/hashutil.h \
 															$(LOC_INCLUDE)/partitioned_counter.h
 
@@ -72,7 +74,6 @@ $(OBJDIR)/bm.o:								$(LOC_INCLUDE)/gqf_wrapper.h \
 # dependencies between .o files and .cc (or .c) files
 
 $(OBJDIR)/gqf.o:							$(LOC_SRC)/gqf.c $(LOC_INCLUDE)/gqf.h
-$(OBJDIR)/gqf_file.o:					$(LOC_SRC)/gqf_file.c $(LOC_INCLUDE)/gqf_file.h
 $(OBJDIR)/hashutil.o:					$(LOC_SRC)/hashutil.c $(LOC_INCLUDE)/hashutil.h
 $(OBJDIR)/partitioned_counter.o:	$(LOC_INCLUDE)/partitioned_counter.h
 

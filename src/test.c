@@ -21,51 +21,105 @@
 
 #include "include/gqf.h"
 #include "include/gqf_int.h"
-#include "include/gqf_file.h"
+
+#include <unistd.h>
+#include <fcntl.h>
+
+#include <unistd.h>
+#include <fcntl.h>
+
+#define KEY_SIZE_BITS 32
+#define VAL_SIZE_BITS 0
+
+const char *input_backup = "test_data";
+
+void dump_key(uint64_t key) {
+	char *k = (char *)(&key) + 7;
+	for (int i=8; i>0; i--) {
+		uint8_t kc = (uint8_t)(*k);
+		printf("%02x ", kc);
+		k = k - 1;
+	}
+	printf("\n");
+}
+
+void write_kv_to_backup(uint64_t *keys, uint64_t *vals, uint64_t count) {
+	int fd = open(input_backup, O_WRONLY | O_CREAT, 0644);
+	uint64_t bytes_written = 0;
+	uint64_t total_bytes_to_write = count * sizeof(uint64_t);
+	printf("%ld\n", total_bytes_to_write);
+	while (bytes_written < total_bytes_to_write) {
+		bytes_written += pwrite(fd, keys + bytes_written, total_bytes_to_write - bytes_written, bytes_written);
+	}
+	bytes_written = 0;
+	while (bytes_written < total_bytes_to_write) {
+		bytes_written += pwrite(fd, vals  + bytes_written, total_bytes_to_write - bytes_written, bytes_written + total_bytes_to_write);
+	}
+	close(fd);
+}
+void read_kv_from_backup(uint64_t *keys, uint64_t *vals, uint64_t count) {
+	int fd = open(input_backup, O_RDONLY);
+	uint64_t bytes_read = 0;
+	uint64_t total_bytes_to_read = count * sizeof(uint64_t);
+	while (bytes_read < total_bytes_to_read) {
+		bytes_read += pread(fd, keys + bytes_read, total_bytes_to_read - bytes_read, bytes_read);
+	}
+	bytes_read = 0;
+	while (bytes_read < total_bytes_to_read) {
+		bytes_read += pread(fd, vals + bytes_read, total_bytes_to_read - bytes_read, bytes_read + total_bytes_to_read);
+	}
+	close(fd);
+}
 
 int main(int argc, char **argv)
 {
 	if (argc < 3) {
-		fprintf(stderr, "Please specify the log of the number of slots and the number of remainder bits in the CQF.\n");
+		fprintf(stderr, "Please specify the log of the number of slots and whether to replay.\n");
 		exit(1);
 	}
 	QF qf;
 	uint64_t qbits = atoi(argv[1]);
-	uint64_t rbits = atoi(argv[2]);
-	uint64_t nhashbits = qbits + rbits;
+	int replay = atoi(argv[2]);
+	uint64_t rbits = KEY_SIZE_BITS - qbits;
+	uint64_t vbits = VAL_SIZE_BITS;
 	uint64_t nslots = (1ULL << qbits);
-	uint64_t nvals = 95*nslots/100;
-	uint64_t key_count = 4;
+	uint64_t nvals = 50*nslots/100;
+
+	// 0 for now, these will be adjusted runtime.
+	uint64_t tombstone_space = 0;
+	uint64_t nrebuilds = 0;
+	uint64_t *keys;
 	uint64_t *vals;
 
 	/* Initialise the CQF */
-	/*if (!qf_malloc(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0)) {*/
-	/*fprintf(stderr, "Can't allocate CQF.\n");*/
-	/*abort();*/
-	/*}*/
-	if (!qf_initfile(&qf, nslots, nhashbits, 0, QF_HASH_INVERTIBLE, 0,
-									 "mycqf.file")) {
+	if (!qf_malloc_advance(&qf, nslots, qbits + rbits, vbits, QF_HASH_NONE, 0, tombstone_space, nrebuilds)) {
 		fprintf(stderr, "Can't allocate CQF.\n");
 		abort();
 	}
 
-	qf_set_auto_resize(&qf, true);
+	// TODO(chesetti): Enable auto resize once implemented.
+	qf_set_auto_resize(&qf, false);
 
 	/* Generate random values */
-	vals = (uint64_t*)malloc(nvals*sizeof(vals[0]));
-	RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
-	srand(0);
-	for (uint64_t i = 0; i < nvals; i++) {
-		vals[i] = (1 * vals[i]) % qf.metadata->range;
-		/*vals[i] = rand() % qf.metadata->range;*/
-		/*fprintf(stdout, "%lx\n", vals[i]);*/
+	keys = (uint64_t*)malloc(nvals*sizeof(vals[0]));
+	vals = (uint64_t*)malloc(nvals*sizeof(keys[0]));
+	if (replay) {
+		printf("Replaying!");
+		read_kv_from_backup(keys, vals, nvals);
+	} else {
+		RAND_bytes((unsigned char *)vals, sizeof(*vals) * nvals);
+		RAND_bytes((unsigned char *)keys, sizeof(*keys) * nvals);
+		write_kv_to_backup(keys, vals, nvals);
 	}
 
 	/* Insert keys in the CQF */
+	fprintf(stdout, "Testing inserts.\n");
 	for (uint64_t i = 0; i < nvals; i++) {
-		int ret = qf_insert(&qf, vals[i], 0, key_count, QF_NO_LOCK);
-		if (ret < 0) {
-			fprintf(stderr, "failed insertion for key: %lx %d.\n", vals[i], 50);
+		int ret = qf_insert(&qf, keys[i], vals[i], QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret == QF_KEY_EXISTS)
+			fprintf(stdout, "Inserting existing key: %lx.\n", keys[i]);
+		else if (ret < 0) {
+			fprintf(stderr, "failed insertion for key: %lx, returned %d.\n", keys[i], ret);
 			if (ret == QF_NO_SPACE)
 				fprintf(stderr, "CQF is full.\n");
 			else if (ret == QF_COULDNT_LOCK)
@@ -75,75 +129,36 @@ int main(int argc, char **argv)
 			abort();
 		}
 	}
-
-	/* Lookup inserted keys and counts. */
+	// inserting again should return QF_KEY_EXISTS
 	for (uint64_t i = 0; i < nvals; i++) {
-		uint64_t count = qf_count_key_value(&qf, vals[i], 0, 0);
-		if (count < key_count) {
-			fprintf(stderr, "failed lookup after insertion for %lx %ld.\n", vals[i],
-							count);
+		int ret = qf_insert(&qf, keys[i], vals[i], QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret != QF_KEY_EXISTS) {
+			fprintf(stderr, "Inserting a key %lx again returned %d, should be QF_KEY_EXISTS=%d.\n", keys[i], ret, QF_KEY_EXISTS);
+		}
+	}
+
+	#if 0
+	qf_dump(&qf);
+	qf_sync_counters(&qf);
+	qf_dump_metadata(&qf);
+	#endif
+
+	/* Query keys in the CQF */
+	fprintf(stdout, "Testing queries .\n");
+	for (uint64_t i = 0; i < nvals; i++) {
+		uint64_t val;
+		int ret = qf_query(&qf, keys[i], &val, QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret == QF_DOESNT_EXIST) {
+			fprintf(stderr, "failed query for key: %lx\n", keys[i]);
 			abort();
 		}
 	}
 
-#if 0
-	for (uint64_t i = 0; i < nvals; i++) {
-		uint64_t count = qf_count_key_value(&qf, vals[i], 0, 0);
-		if (count < key_count) {
-			fprintf(stderr, "failed lookup during deletion for %lx %ld.\n", vals[i],
-							count);
-			abort();
-		}
-		if (count > 0) {
-			/*fprintf(stdout, "deleting: %lx\n", vals[i]);*/
-			qf_delete_key_value(&qf, vals[i], 0, QF_NO_LOCK);
-			/*qf_dump(&qf);*/
-			uint64_t cnt = qf_count_key_value(&qf, vals[i], 0, 0);
-			if (cnt > 0) {
-				fprintf(stderr, "failed lookup after deletion for %lx %ld.\n", vals[i],
-								cnt);
-				abort();
-			}
-		}
-	}
-#endif
-
-	/* Write the CQF to disk and read it back. */
-	char filename[] = "mycqf_serialized.cqf";
-	fprintf(stdout, "Serializing the CQF to disk.\n");
-	uint64_t total_size = qf_serialize(&qf, filename);
-	if (total_size < sizeof(qfmetadata) + qf.metadata->total_size_in_bytes) {
-		fprintf(stderr, "CQF serialization failed.\n");
-		abort();
-	}
-	qf_deletefile(&qf);
-
-	QF file_qf;
-	fprintf(stdout, "Reading the CQF from disk.\n");
-	if (!qf_deserialize(&file_qf, filename)) {
-		fprintf(stderr, "Can't initialize the CQF from file: %s.\n", filename);
-		abort();
-	}
-	for (uint64_t i = 0; i < nvals; i++) {
-		uint64_t count = qf_count_key_value(&file_qf, vals[i], 0, 0);
-		if (count < key_count) {
-			fprintf(stderr, "failed lookup in file based CQF for %lx %ld.\n",
-							vals[i], count);
-			abort();
-		}
-	}
-
-	fprintf(stdout, "Testing iterator and unique indexes.\n");
 	/* Initialize an iterator and validate counts. */
-	QFi qfi;
-	qf_iterator_from_position(&file_qf, &qfi, 0);
-	QF unique_idx;
-	if (!qf_malloc(&unique_idx, file_qf.metadata->nslots, nhashbits, 0,
-								 QF_HASH_INVERTIBLE, 0)) {
-		fprintf(stderr, "Can't allocate set.\n");
-		abort();
-	}
 
+	// TODO(chesetti): Write test for iterator.
+	/*
+	fprintf(stdout, "Testing iterator and unique indexes.\n");
 	int64_t last_index = -1;
 	int i = 0;
 	qf_iterator_from_position(&file_qf, &qfi, 0);
@@ -182,35 +197,34 @@ int main(int argc, char **argv)
 		i++;
 		qfi_next(&qfi);
 	}
+	*/
 
 	/* remove some counts  (or keys) and validate. */
 	fprintf(stdout, "Testing remove/delete_key.\n");
 	for (uint64_t i = 0; i < nvals; i++) {
-		uint64_t count = qf_count_key_value(&file_qf, vals[i], 0, 0);
-		/*if (count < key_count) {*/
-		/*fprintf(stderr, "failed lookup during deletion for %lx %ld.\n", vals[i],*/
-		/*count);*/
-		/*abort();*/
-		/*}*/
-		int ret = qf_delete_key_value(&file_qf, vals[i], 0, QF_NO_LOCK);
-		count = qf_count_key_value(&file_qf, vals[i], 0, 0);
-		if (count > 0) {
-			if (ret < 0) {
-				fprintf(stderr, "failed deletion for %lx %ld ret code: %d.\n",
-								vals[i], count, ret);
-				abort();
-			}
-			uint64_t new_count = qf_count_key_value(&file_qf, vals[i], 0, 0);
-			if (new_count > 0) {
-				fprintf(stderr, "delete key failed for %lx %ld new count: %ld.\n",
-								vals[i], count, new_count);
-				abort();
-			}
+		int ret = qf_remove(&qf, keys[i], QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret == QF_DOESNT_EXIST) 
+			fprintf(stdout, "Removing duplicated key: %lx.\n", keys[i]);
+		else if (ret < 0) {
+			fprintf(stderr, "failed deletion for ret code: %d.\n", ret);
+			dump_key(keys[i]);
+			abort();
+		}
+		/* Removing a key that was just removed should return QF_DOESNT_EXIST */
+		ret = qf_remove(&qf, keys[i], QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret != QF_DOESNT_EXIST) {
+			fprintf(stderr, "Deleting key %lx returns %d\n", keys[i], ret);
+			abort();
+		}
+
+		uint64_t val;
+		/* Query that keys are deleted in the CQF */
+		ret = qf_query(&qf, keys[i], &val, QF_NO_LOCK | QF_KEY_IS_HASH);
+		if (ret != QF_DOESNT_EXIST) {
+			fprintf(stderr, "Did not delete key %lx\n", keys[i]);
+			abort();
 		}
 	}
-
-	qf_deletefile(&file_qf);
-
 	fprintf(stdout, "Validated the CQF.\n");
 }
 

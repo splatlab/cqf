@@ -41,7 +41,6 @@ extern "C" {
 	*/
 	
 	enum qf_hashmode {
-		QF_HASH_DEFAULT,
 		QF_HASH_INVERTIBLE,
 		QF_HASH_NONE
 	};
@@ -80,9 +79,9 @@ extern "C" {
 	 * buffer then it will return the total size needed in bytes to
 	 * initialize the CQF.  This function takes ownership of buffer.
 	 */
-	uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
-									 value_bits, enum qf_hashmode hash, uint32_t seed, void*
-									 buffer, uint64_t buffer_len);
+	uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits, 
+									 uint64_t value_bits, enum qf_hashmode hash, uint32_t seed, 
+									 void* buffer, uint64_t buffer_len);
 
 	/* Create a CQF in "buffer". Note that this does not initialize the
 	 contents of bufferss Use this function if you have read a CQF, e.g.
@@ -99,6 +98,7 @@ extern "C" {
 	 * into it. 
 	 * If there is not enough space at buffer then it will return the total size
 	 * needed in bytes to initialize the new CQF.
+	 * TODO: Otherwise, it will return what?
 	 * */
 	uint64_t qf_resize(QF* qf, uint64_t nslots, void* buffer, uint64_t
 										 buffer_len);
@@ -133,84 +133,43 @@ extern "C" {
 #define QF_NO_SPACE (-1)
 #define QF_COULDNT_LOCK (-2)
 #define QF_DOESNT_EXIST (-3)
+#define QF_KEY_EXISTS (-4)
 	
-	/* Increment the counter for this key/value pair by count. 
+	/* Insert this key/value pair.
 	 * Return value:
-	 *    >= 0: distance from the home slot to the slot in which the key is
-	 *          inserted (or 0 if count == 0).
+	 *    == 0: key already exists in the CQF, update the value.
+	 *    == QF_DOESNT_EXIST: Specified key did not exist. Inserted it. It's not
+	 * 											  an error.
 	 *    == QF_NO_SPACE: the CQF has reached capacity.
 	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
-	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
-								flags);
+	int qf_insert(QF *qf, uint64_t key, uint64_t value, uint8_t flags);
 
-	/* Set the counter for this key/value pair to count. 
-	 Return value: Same as qf_insert. 
-	 Returns 0 if new count is equal to old count.
-	*/
-	int qf_set_count(QF *qf, uint64_t key, uint64_t value, uint64_t count,
-									 uint8_t flags);
-
-	/* Remove up to count instances of this key/value combination.
-	 * If the CQF contains <= count instances, then they will all be 
-	 * removed, which is not an error.
+	/* Remove this key.
 	 * Return value:
-	 *    >=  0: number of slots freed.
+	 *    == 0: Found and removed the key.
 	 *    == QF_DOESNT_EXIST: Specified item did not exist.
 	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
 	 */
-	int qf_remove(QF *qf, uint64_t key, uint64_t value, uint64_t count, uint8_t
-								flags);
-
-	/* Remove all instances of this key/value pair. */
-	int qf_delete_key_value(QF *qf, uint64_t key, uint64_t value, uint8_t flags);
-
-	/* Remove all instances of this key. */
-	/* NOT IMPLEMENTED YET. */
-	//void qf_delete_key(QF *qf, uint64_t key);
-
-	/* Replace the association (key, oldvalue, count) with the association
-		 (key, newvalue, count). If there is already an association (key,
-		 newvalue, count'), then the two associations will be merged and
-		 their counters will be summed, resulting in association (key,
-		 newvalue, count' + count). */
-	/* NOT IMPLEMENTED YET. */
-	//void qf_replace(QF *qf, uint64_t key, uint64_t oldvalue, uint64_t newvalue);
+	int qf_remove(QF *qf, uint64_t key, uint8_t flags);
 
 	/****************************************
    Query functions
 	****************************************/
 	
-	/* Lookup the value associated with key.  Returns the count of that
-		 key/value pair in the QF.  If it returns 0, then, the key is not
-		 present in the QF. Only returns the first value associated with key
-		 in the QF.  If you want to see others, use an iterator. 
-		 May return QF_COULDNT_LOCK if called with QF_TRY_LOCK.  */
-	uint64_t qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t
-										flags);
-
-	/* Return the number of times key has been inserted, with any value,
-		 into qf. */
-	/* NOT IMPLEMENTED YET. */
-	//uint64_t qf_count_key(const QF *qf, uint64_t key);
-
+	/* Lookup the key.
+	 * Return value:
+	 *    == 0: Found the key and filled the value.
+	 *    == QF_DOESNT_EXIST: Specified item did not exist.
+	 *    == QF_COULDNT_LOCK: TRY_ONCE_LOCK has failed to acquire the lock.
+	 */
+	int qf_query(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags);
+	
 	/* Return the number of times key has been inserted, with the given
 		 value, into qf.
 		 May return QF_COULDNT_LOCK if called with QF_TRY_LOCK.  */
 	uint64_t qf_count_key_value(const QF *qf, uint64_t key, uint64_t value,
 															uint8_t flags);
-
-	/* Returns a unique index corresponding to the key in the CQF.  Note
-		 that this can change if further modifications are made to the
-		 CQF.
-
-		 If the key is not found then returns QF_DOESNT_EXIST.
-		 May return QF_COULDNT_LOCK if called with QF_TRY_LOCK.
-	 */
-	int64_t qf_get_unique_index(const QF *qf, uint64_t key, uint64_t value,
-															uint8_t flags);
-
-
 	/****************************************
    Metadata accessors.
 	****************************************/
@@ -221,7 +180,6 @@ extern "C" {
 	__uint128_t      qf_get_hash_range(const QF *qf);
 
 	/* Space usage info. */
-	bool     qf_is_auto_resize_enabled(const QF *qf);
 	uint64_t qf_get_total_size_in_bytes(const QF *qf);
 	uint64_t qf_get_nslots(const QF *qf);
 	uint64_t qf_get_num_occupied_slots(const QF *qf);
@@ -231,10 +189,6 @@ extern "C" {
 	uint64_t qf_get_num_value_bits(const QF *qf);
 	uint64_t qf_get_num_key_remainder_bits(const QF *qf);
 	uint64_t qf_get_bits_per_slot(const QF *qf);
-
-	/* Number of (distinct) key-value pairs. */
-	uint64_t qf_get_sum_of_counts(const QF *qf);
-	uint64_t qf_get_num_distinct_key_value_pairs(const QF *qf);
 
 	void qf_sync_counters(const QF *qf);
 
@@ -256,31 +210,27 @@ extern "C" {
 	int64_t qf_iterator_from_position(const QF *qf, QFi *qfi, uint64_t position);
 
 	/* Initialize an iterator and position it at the smallest index
-	 * containing a key-value pair whose hash is greater than or equal
-	 * to the specified key-value pair.
+	 * containing a key whose hash is greater than or equal
+	 * to the specified key.
 	 * Return value:
 	 *  >= 0: iterator is initialized and position at the returned slot.
 	 *   = QFI_INVALID: iterator has reached end.
 	 */
-	int64_t qf_iterator_from_key_value(const QF *qf, QFi *qfi, uint64_t key,
-																		 uint64_t value, uint8_t flags);
+	int64_t qf_iterator_from_key(const QF *qf, QFi *qfi, uint64_t key, uint8_t flags);
 
-	/* Requires that the hash mode of the CQF is INVERTIBLE or NONE.
-	 * If the hash mode is DEFAULT then returns QF_INVALID.
+	/* Find key and value at the current position of the iterator.
+	 * Return value:
+	 *   = 0: Iterator is still valid, i.e. the key exists.
+	 *   = QFI_INVALID: iterator has reached end, i.e. the key doesn't exist.
+	 */
+	int qfi_get_key(const QFi *qfi, uint64_t *key, uint64_t *value);
+
+	/* Find hash of the key and the value at the current position of the iterator.
 	 * Return value:
 	 *   = 0: Iterator is still valid.
 	 *   = QFI_INVALID: iterator has reached end.
-	 *   = QF_INVALID: hash mode is QF_DEFAULT_HASH
 	 */
-	int qfi_get_key(const QFi *qfi, uint64_t *key, uint64_t *value, uint64_t
-									*count);
-
-	/* Return value:
-	 *   = 0: Iterator is still valid.
-	 *   = QFI_INVALID: iterator has reached end.
-	 */
-	int qfi_get_hash(const QFi *qfi, uint64_t *hash, uint64_t *value, uint64_t
-									 *count);
+	int qfi_get_hash(const QFi *qfi, uint64_t *hash, uint64_t *value);
 
 	/* Advance to next entry.
 	 * Return value:
@@ -311,12 +261,13 @@ extern "C" {
 	/* merge multiple QFs into the final QF one. */
 	void qf_multi_merge(const QF *qf_arr[], int nqf, QF *qfr);
 
-	/* find cosine similarity between two QFs. */
-	uint64_t qf_inner_product(const QF *qfa, const QF *qfb);
-
-	/* square of the L_2 norm of a QF (i.e. sum of squares of counts of
-		 all items in the CQF). */
-	uint64_t qf_magnitude(const QF *qf);
+	/* Expose tombstone parameters for performance tests. 
+	 * When use 0 for tombstone_space and/or nrebuilds, the default values will
+	 * be calculated base on the load factor.
+   */
+	bool qf_malloc_advance(QF *qf, uint64_t nslots, uint64_t key_bits, uint64_t
+								 					value_bits, enum qf_hashmode hash, uint32_t seed,
+										 			uint64_t tombstone_space, uint64_t nrebuilds);
 
 	/***********************************
 		Debugging functions.
@@ -324,7 +275,6 @@ extern "C" {
 
 	void qf_dump(const QF *);
 	void qf_dump_metadata(const QF *qf);
-
 
 #ifdef __cplusplus
 }

@@ -12,7 +12,6 @@
 
 #include "gqf.h"
 #include "gqf_int.h"
-#include "gqf_file.h"
 
 QF g_quotient_filter;
 QFi g_quotient_filter_itr;
