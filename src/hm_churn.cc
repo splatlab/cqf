@@ -24,6 +24,7 @@
 using namespace std;
 
 #include "include/rhm_wrapper.h"
+#include "include/trhm_wrapper.h"
 #include "include/zipf.h"
 
 #define MAX_VALUE(nbits) ((1ULL << (nbits)) - 1)
@@ -45,6 +46,8 @@ typedef struct hashmap {
 
 hashmap rhm = {g_rhm_init, g_rhm_insert, g_rhm_lookup, g_rhm_remove,
                g_rhm_destroy};
+hashmap trhm = {g_trhm_init, g_trhm_insert, g_trhm_lookup, g_trhm_remove,
+               g_trhm_destroy};
 
 uint64_t tv2msec(struct timeval tv) {
   uint64_t ret = tv.tv_sec * 1000 + tv.tv_usec / 1000;
@@ -229,8 +232,8 @@ int main(int argc, char **argv) {
   }
   if (strcmp(datastruct, "rhm") == 0) {
     hashmap_ds = rhm;
-    //	} else if (strcmp(datastruct, "qf") == 0) {
-    //		filter_ds = qf;
+    } else if (strcmp(datastruct, "trhm") == 0) {
+    		hashmap_ds = trhm;
     //	} else if (strcmp(datastruct, "cf") == 0) {
     //		filter_ds = cf;
     //	} else if (strcmp(datastruct, "bf") == 0) {
