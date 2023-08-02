@@ -318,7 +318,6 @@ int main(int argc, char **argv) {
         auto op = ops[op_idx];
         printf("%d %lx %lx\n", op.op, op.key, op.value);
         int ret = hashmap_ds.insert(op.key, op.value);
-        qf_dump(&g_trobinhood_hashmap);
         #if STRICT
         uint64_t lookup_value = 0;
         ret = hashmap_ds.lookup(op.key, &lookup_value);
@@ -338,7 +337,6 @@ int main(int argc, char **argv) {
       auto op = ops[j];
       printf("%d %lx %lx\n", op.op, op.key, op.value);
       int ret = hashmap_ds.insert(op.key, op.value);
-      qf_dump(&g_trobinhood_hashmap);
       #if STRICT
       if (ret < 0)
         exit(0);
@@ -381,7 +379,6 @@ int main(int argc, char **argv) {
           #if STRICT
           if (ret < 0) {
             printf("REMOVE_FAILED\n");
-            qf_dump_long(&g_robinhood_hashmap);
             fflush(stdout);
             exit(0);
           }
@@ -394,15 +391,12 @@ int main(int argc, char **argv) {
           #if STRICT
           if (ret < 0 || lookup_value != op.value) {
             printf("%d LOOKUP_FAILED %lx %lx %lx\n", ret, op.key, op.value, lookup_value);
-            qf_dump_long(&g_trobinhood_hashmap);
-            qf_dump(&g_trobinhood_hashmap);
             fflush(stdout);
             exit(0);
           }
           #endif
           break;
         }
-        qf_dump(&g_trobinhood_hashmap);
       }
       gettimeofday(&tv_churn[exp + 1][run], NULL);
     }

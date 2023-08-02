@@ -23,7 +23,7 @@
 
 int pc_init(pc_t *pc, int64_t *global_counter, uint32_t num_counters,
 						int32_t threshold) {
-	int num_cpus = (int)sysconf( _SC_NPROCESSORS_ONLN );
+	uint32_t num_cpus = (uint32_t)sysconf( _SC_NPROCESSORS_ONLN );
 	if (num_cpus < 0) {
 		perror( "sysconf" );
 		return PC_ERROR;

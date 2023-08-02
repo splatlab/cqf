@@ -43,6 +43,7 @@ extern "C" {
 		uint8_t offset; 
 		uint64_t occupieds[QF_METADATA_WORDS_PER_BLOCK];
 		uint64_t runends[QF_METADATA_WORDS_PER_BLOCK];
+		// 1 for both empty or tombston, 0 for real items.
 		uint64_t tombstones[QF_METADATA_WORDS_PER_BLOCK];
 
 #if QF_BITS_PER_SLOT == 8
@@ -63,11 +64,6 @@ extern "C" {
 	struct __attribute__ ((__packed__)) qfblock;
 	typedef struct qfblock qfblock;
 
-  typedef struct file_info {
-		int fd;
-		char *filepath;
-	} file_info;
-
 	// The below struct is used to instrument the code.
 	// It is not used in normal operations of the CQF.
 	typedef struct {
@@ -78,12 +74,11 @@ extern "C" {
 	} wait_time_data;
 
 	typedef struct quotient_filter_runtime_data {
-		file_info f_info;
 		uint32_t auto_resize;
 		int64_t (*container_resize)(QF *qf, uint64_t nslots);
 		pc_t pc_nelts;
-		pc_t pc_ndistinct_elts;
 		pc_t pc_noccupied_slots;
+		pc_t pc_n_tombstones;
 		uint64_t num_locks;
 		volatile int metadata_lock;
 		volatile int *locks;
@@ -95,20 +90,25 @@ extern "C" {
 	typedef struct quotient_filter_metadata {
 		uint64_t magic_endian_number;
 		enum qf_hashmode hash_mode;
-		uint32_t reserved;
+		uint32_t reserved;					// TODO: what is this?
 		uint64_t total_size_in_bytes;
 		uint32_t seed;
 		uint64_t nslots;
 		uint64_t xnslots;
+		uint64_t tombstone_space;		// Distance between two primitive tombstones.
+		uint64_t nrebuilds;      		// Number of rebuilds per loop.
+		uint64_t rebuild_slots;  		// Number of slots to be rebuilt each time.
 		uint64_t key_bits;
 		uint64_t value_bits;
 		uint64_t key_remainder_bits;
 		uint64_t bits_per_slot;
 		__uint128_t range;
 		uint64_t nblocks;
-		uint64_t nelts;
-		uint64_t ndistinct_elts;
-		uint64_t noccupied_slots;
+		uint64_t next_tombstone;	// Next position to put a tombstone.
+		uint64_t rebuild_pos;			// Current rebuild position
+		uint64_t nelts;						// Without tombstones
+		uint64_t noccupied_slots; // With tombstones
+		uint64_t n_tombstones;
 	} quotient_filter_metadata;
 
 	typedef quotient_filter_metadata qfmetadata;
