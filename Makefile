@@ -10,6 +10,8 @@ endif
 
 ifdef S
 	STRICT= -DSTRICT=1
+else
+	STRICT=
 endif
 
 ifdef NH

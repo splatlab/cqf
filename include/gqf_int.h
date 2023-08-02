@@ -43,9 +43,7 @@ extern "C" {
 		uint8_t offset; 
 		uint64_t occupieds[QF_METADATA_WORDS_PER_BLOCK];
 		uint64_t runends[QF_METADATA_WORDS_PER_BLOCK];
-#if QF_WITH_TOMBSTONE
 		uint64_t tombstones[QF_METADATA_WORDS_PER_BLOCK];
-#endif
 
 #if QF_BITS_PER_SLOT == 8
 		uint8_t  slots[QF_SLOTS_PER_BLOCK];

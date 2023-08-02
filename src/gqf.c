@@ -655,6 +655,30 @@ static inline uint64_t find_first_empty_slot(QF *qf, uint64_t from) {
   return from;
 }
 
+static inline int is_tombstone(const QF *qf, uint64_t index)
+{
+	return (METADATA_WORD(qf, tombstones, index) >> ((index % QF_SLOTS_PER_BLOCK) %
+																								64)) & 1ULL;
+}
+
+/* Find the index of first tombstone, it can be empty or not empty. */
+static inline uint64_t find_first_tombstone(QF *qf, uint64_t from)
+{
+	uint64_t block_index = from / QF_SLOTS_PER_BLOCK;
+	qfblock * b = get_block(qf, block_index);
+	const uint64_t slot_offset = from % QF_SLOTS_PER_BLOCK;
+	uint64_t tomb_offset = bitselect(b->tombstones[0] & (~BITMASK(slot_offset)), 0);
+	while (tomb_offset == 64) {  // No tombstone in the rest of this block.
+		block_index++;
+		tomb_offset = bitselect(get_block(qf, block_index)->tombstones[0], 0);
+    if (block_index == qf->metadata->nblocks) {
+      return -1;
+    }
+	}
+	return block_index * QF_SLOTS_PER_BLOCK + tomb_offset;
+}
+
+
 static inline uint64_t shift_into_b(const uint64_t a, const uint64_t b,
                                     const int bstart, const int bend,
                                     const int amount) {
@@ -717,6 +741,49 @@ static inline void shift_remainders(QF *qf, const uint64_t start_index,
                    qf->metadata->bits_per_slot);
 }
 
+// Shift metadata runends and tombstones to the big direction by distance.
+// Fill with 0s in the small size.
+// TODO: Refactor this function.
+static inline void shift_runends_tombstones(QF *qf, int64_t first, uint64_t last,
+																 uint64_t distance)
+{
+	assert(last < qf->metadata->xnslots);
+	assert(distance < 64);
+	uint64_t first_word = first / 64;
+	uint64_t bstart = first % 64;
+	uint64_t last_word = (last + distance) / 64;
+	uint64_t bend = (last + distance + 1) % 64;
+
+	if (last_word != first_word) {
+		METADATA_WORD(qf, runends, 64*last_word) = shift_into_b(METADATA_WORD(qf, runends, 64*(last_word-1)), 
+																														METADATA_WORD(qf, runends, 64*last_word),
+																														0, bend, distance);
+		METADATA_WORD(qf, tombstones, 64*last_word) = shift_into_b(METADATA_WORD(qf, tombstones, 64*(last_word-1)), 
+																														METADATA_WORD(qf, tombstones, 64*last_word),
+																														0, bend, distance);
+		bend = 64;
+		last_word--;
+		while (last_word != first_word) {
+			METADATA_WORD(qf, runends, 64*last_word) = shift_into_b(METADATA_WORD(qf, runends, 64*(last_word-1)), 
+																															METADATA_WORD(qf, runends, 64*last_word),
+																															0, bend, distance);
+			METADATA_WORD(qf, tombstones, 64*last_word) = shift_into_b(METADATA_WORD(qf, tombstones, 64*(last_word-1)), 
+																															METADATA_WORD(qf, tombstones, 64*last_word),
+																															0, bend, distance);
+			last_word--;
+		}
+	}
+	METADATA_WORD(qf, runends, 64*last_word) = shift_into_b(0, METADATA_WORD(qf,
+																																					 runends,
+																																					 64*last_word),
+																													bstart, bend, distance);
+	METADATA_WORD(qf, tombstones, 64*last_word) = shift_into_b(0, METADATA_WORD(qf,
+																																					 tombstones,
+																																					 64*last_word),
+																													bstart, bend, distance);
+
+}
+
 #endif
 static inline void qf_dump_block_long(const QF *qf, uint64_t i) {
   uint64_t j, k;
@@ -728,13 +795,15 @@ static inline void qf_dump_block_long(const QF *qf, uint64_t i) {
   for (j = 0; j < QF_SLOTS_PER_BLOCK; j++)
     printf("%02lx ", get_block(qf, i)->slots[j]);
 #else
-printf("BL O R V\n");
+printf("BL O R T V\n");
   for (j = 0; j < QF_SLOTS_PER_BLOCK;  j++) {
     printf("%02lx", j); // , get_block(qf, i)->slots[j]);
     printf(" %d",
            (get_block(qf, i)->occupieds[j / 64] & (1ULL << (j % 64))) ? 1 : 0);
-    printf(" %d ",
+    printf(" %d",
            (get_block(qf, i)->runends[j / 64] & (1ULL << (j % 64))) ? 1 : 0);
+    printf(" %d ",
+           (get_block(qf, i)->tombstones[j / 64] & (1ULL << (j % 64))) ? 1 : 0);
     uint64_t slot = i * QF_SLOTS_PER_BLOCK + j;
     if (slot < qf->metadata->xnslots) {
       printf("%" PRIx64, get_slot(qf, i*QF_SLOTS_PER_BLOCK + j));
@@ -764,6 +833,11 @@ static inline void qf_dump_block(const QF *qf, uint64_t i) {
   for (j = 0; j < QF_SLOTS_PER_BLOCK; j++)
     printf(" %d ",
            (get_block(qf, i)->runends[j / 64] & (1ULL << (j % 64))) ? 1 : 0);
+  printf("\n");
+
+  for (j = 0; j < QF_SLOTS_PER_BLOCK; j++)
+    printf(" %d ",
+           (get_block(qf, i)->tombstones[j / 64] & (1ULL << (j % 64))) ? 1 : 0);
   printf("\n");
 
 #if QF_BITS_PER_SLOT == 8 || QF_BITS_PER_SLOT == 16 || QF_BITS_PER_SLOT == 32
@@ -879,8 +953,8 @@ insert_replace_slots_and_shift_remainders_and_runends_and_offsets(
     shift_slots(qf, insert_index, empties[ninserts - 1] - 1, ninserts);
 
     for (j = 0; j < ninserts - 1; j++)
-      shift_runends(qf, empties[j + 1] + 1, empties[j] - 1, j + 1);
-    shift_runends(qf, insert_index, empties[ninserts - 1] - 1, ninserts);
+      shift_runends_tombstones(qf, empties[j + 1] + 1, empties[j] - 1, j + 1);
+    shift_runends_tombstones(qf, insert_index, empties[ninserts - 1] - 1, ninserts);
 
     for (i = noverwrites; i < total_remainders - 1; i++)
       METADATA_WORD(qf, runends, overwrite_index + i) &=
@@ -937,6 +1011,102 @@ insert_replace_slots_and_shift_remainders_and_runends_and_offsets(
   modify_metadata(&qf->runtimedata->pc_noccupied_slots, ninserts);
 
   return true;
+}
+
+static inline int
+remove_tombstones(
+    QF *qf, int operation, uint64_t bucket_index, uint64_t tombstone_start_index, uint64_t num_tombstones) {
+  uint64_t i;
+
+  // TODO: !!!!!!!!!!!! UPDATE METADATA !!!!!!!!!!!!
+
+  // If this is the last thing in its run, then we may need to set a new runend
+  // bit
+  if (is_runend(qf, tombstone_start_index + num_tombstones - 1)) {
+    if (tombstone_start_index> bucket_index &&
+               !is_runend(qf, tombstone_start_index - 1)) {
+      // If we're deleting this entry entirely, but it is not the first entry in
+      // this run, then set the preceding entry to be the runend
+      METADATA_WORD(qf, runends, tombstone_start_index - 1) |=
+          1ULL << ((tombstone_start_index - 1) % 64);
+    }
+  }
+
+  // shift slots back one run at a time
+  uint64_t original_bucket = bucket_index;
+  uint64_t current_bucket = bucket_index;
+  uint64_t current_slot = tombstone_start_index;
+  uint64_t current_distance = num_tombstones;
+  int ret_current_distance = current_distance;
+
+  while (current_distance > 0) {
+    if (is_runend(qf, current_slot + current_distance - 1)) {
+      do {
+        current_bucket++;
+      } while (current_bucket < current_slot + current_distance &&
+               !is_occupied(qf, current_bucket));
+    }
+
+    if (current_bucket <= current_slot) {
+      set_slot(qf, current_slot, get_slot(qf, current_slot + current_distance));
+      if (is_runend(qf, current_slot) !=
+          is_runend(qf, current_slot + current_distance))
+        METADATA_WORD(qf, runends, current_slot) ^= 1ULL << (current_slot % 64);
+
+      if (is_tombstone(qf, current_slot) !=
+          is_tombstone(qf, current_slot + current_distance))
+        METADATA_WORD(qf, tombstones, current_slot) ^= 1ULL << (current_slot % 64);
+
+      current_slot++;
+
+    } else if (current_bucket <= current_slot + current_distance) {
+      uint64_t i;
+      for (i = current_slot; i < current_slot + current_distance; i++) {
+        set_slot(qf, i, 0);
+        METADATA_WORD(qf, runends, i) &= ~(1ULL << (i % 64));
+        METADATA_WORD(qf, tombstones, i) |= (1ULL << (i % 64));
+      }
+      current_distance = current_slot + current_distance - current_bucket;
+      current_slot = current_bucket;
+    } else {
+      current_distance = 0;
+    }
+  }
+
+  // reset the occupied bit of the hash bucket index if the hash is the
+  // only item in the run and is removed completely.
+  if (operation)
+    METADATA_WORD(qf, occupieds, bucket_index) &=
+        ~(1ULL << (bucket_index % 64));
+
+  // update the offset bits.
+  // find the number of occupied slots in the original_bucket block.
+  // Then find the runend slot corresponding to the last run in the
+  // original_bucket block.
+  // Update the offset of the block to which it belongs.
+  uint64_t original_block = original_bucket / QF_SLOTS_PER_BLOCK;
+    while (1) {
+      uint64_t last_occupieds_hash_index =
+          QF_SLOTS_PER_BLOCK * original_block + (QF_SLOTS_PER_BLOCK - 1);
+      uint64_t runend_index = run_end(qf, last_occupieds_hash_index);
+      // runend spans across the block
+      // update the offset of the next block
+      if (runend_index / QF_SLOTS_PER_BLOCK ==
+          original_block) { // if the run ends in the same block
+        if (get_block(qf, original_block + 1)->offset == 0)
+          break;
+        get_block(qf, original_block + 1)->offset = 0;
+      } else { // if the last run spans across the block
+        if (get_block(qf, original_block + 1)->offset ==
+            (runend_index - last_occupieds_hash_index))
+          break;
+        get_block(qf, original_block + 1)->offset =
+            (runend_index - last_occupieds_hash_index);
+      }
+      original_block++;
+    }
+
+  return ret_current_distance;
 }
 
 static inline int
@@ -1694,6 +1864,15 @@ uint64_t qf_init(QF *qf, uint64_t nslots, uint64_t key_bits,
   qf->runtimedata->metadata_lock = 0;
   qf->runtimedata->locks =
       (volatile int *)calloc(qf->runtimedata->num_locks, sizeof(volatile int));
+
+  // Set all tombstones
+  char *b = (char *)(qf->blocks);
+  size_t block_size =
+      sizeof(qfblock) + QF_SLOTS_PER_BLOCK * qf->metadata->bits_per_slot / 8;
+  for (uint64_t i = 0; i < qf->metadata->nblocks; i++) {
+    ((qfblock *)b)->tombstones[0] = 0xffffffffffffffffULL;
+    b += block_size;
+  }
   if (qf->runtimedata->locks == NULL) {
     perror("Couldn't allocate memory for runtime locks.");
     exit(EXIT_FAILURE);
@@ -2851,7 +3030,7 @@ bool trhm_free(RHM *rhm) {
   return qf_free(rhm);
 }
 
-static inline int trhm_insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock) {
+static inline int trhm_insert1(QF *qf, uint64_t hash, uint8_t runtime_lock) {
   int ret_distance = 0;
   uint64_t hash_slot_value = (hash & BITMASK(qf->metadata->bits_per_slot));
   uint64_t hash_remainder = hash_slot_value >> qf->metadata->value_bits;
@@ -2861,13 +3040,14 @@ static inline int trhm_insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock) {
     if (!qf_lock(qf, hash_bucket_index, /*small*/ true, runtime_lock))
       return QF_COULDNT_LOCK;
   }
-
   if (is_empty(qf, hash_bucket_index) /* might_be_empty(qf, hash_bucket_index) && runend_index == hash_bucket_index */) {
     METADATA_WORD(qf, runends, hash_bucket_index) |=
         1ULL << (hash_bucket_block_offset % 64);
     set_slot(qf, hash_bucket_index, hash_slot_value);
     METADATA_WORD(qf, occupieds, hash_bucket_index) |=
         1ULL << (hash_bucket_block_offset % 64);
+    METADATA_WORD(qf, tombstones, hash_bucket_index) &=
+        ~(1ULL << (hash_bucket_block_offset % 64));
     ret_distance = 0;
     modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
     modify_metadata(&qf->runtimedata->pc_nelts, 1);
@@ -2879,90 +3059,121 @@ static inline int trhm_insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock) {
     uint64_t runstart_index =
         hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
     if (is_occupied(qf, hash_bucket_index)) {
+      insert_index = runstart_index;
       uint64_t current_remainder = get_slot_remainder(qf, runstart_index);
-      while (current_remainder < hash_remainder && runstart_index <= runend_index) {
-        runstart_index++;
-        /* This may read past the end of the run, but the while loop
-                 condition will prevent us from using the invalid result in
-                 that case. */
-        current_remainder = get_slot_remainder(qf, runstart_index);
-      }
-      /* If this is the first time we've inserted the new remainder,
-               and it is larger than any remainder in the run. */
-      if (runstart_index > runend_index) {
-        operation = 1;
-        insert_index = runstart_index;
+			/* Skip over reminders less than hash_remainder. */
+			while (current_remainder < hash_remainder && insert_index <=
+						 runend_index) {
+        printf("%lu %lu\n", insert_index, runend_index);
+				insert_index++;
+
+				/* This may read past the end of the run, but the while loop
+					 condition will prevent us from using the invalid result in
+					 that case. */
+				current_remainder = get_slot_remainder(qf, insert_index);
+			} 
+      if (insert_index > runend_index) {
+				operation = 1;
         new_value = hash_slot_value;
-        modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
-      /* Replace the current slot with this new hash. Don't shift anything. */
-      } else if (current_remainder == hash_remainder) {
-        operation = -1;
-        insert_index = runstart_index;
+			/* If the remainder exists. */
+			} else if (current_remainder == hash_remainder) {
+				operation = -1; /* Don't actually shift anything.*/
         new_value = hash_slot_value;
+        /* Set the value and clear the tombstone marker. */
         set_slot(qf, insert_index, new_value);
-      /* First time we're inserting this remainder, but there are 
-          are larger remainders in the run. */
-      } else {
+				METADATA_WORD(qf, tombstones, insert_index)
+					&= ~(1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64));
+
+				/* This is the first time we're inserting this remainder, but
+					 there are larger remainders already in the run. */
+			}
+      else if (current_remainder != hash_remainder) {
         operation = 2; /* Inserting */
-        insert_index = runstart_index;
         new_value = hash_slot_value;
         modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
       }
-    } else {
-        modify_metadata(&qf->runtimedata->pc_ndistinct_elts, 1);
     }
+    
     if (operation >= 0) {
-      uint64_t empty_slot_index = find_first_empty_slot(qf, runend_index + 1);
-      if (empty_slot_index >= qf->metadata->xnslots) {
+			uint64_t available_slot_index = find_first_tombstone(qf, insert_index);
+      while (is_runend(qf, available_slot_index)) {
+        available_slot_index = find_first_empty_slot(qf, insert_index);
+      }
+      if (available_slot_index == -1) {
         return QF_NO_SPACE;
       }
-      shift_remainders(qf, insert_index, empty_slot_index);
-      set_slot(qf, insert_index, new_value);
-      ret_distance = insert_index - hash_bucket_index;
-
-      shift_runends(qf, insert_index, empty_slot_index - 1, 1);
-
-      switch (operation) {
-      case 0:
-        METADATA_WORD(qf, runends, insert_index) |=
-            1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64);
-        break;
-      case 1:
-        METADATA_WORD(qf, runends, insert_index - 1) &=
-            ~(1ULL << (((insert_index - 1) % QF_SLOTS_PER_BLOCK) % 64));
-        METADATA_WORD(qf, runends, insert_index) |=
-            1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64);
-        break;
-      case 2:
-        METADATA_WORD(qf, runends, insert_index) &=
-            ~(1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64));
-        break;
-      default:
-        fprintf(stderr, "Invalid operation %d\n", operation);
-        abort();
+			if (available_slot_index >= qf->metadata->xnslots) {
+				return QF_NO_SPACE;
+			}
+			if (is_empty(qf, available_slot_index)) {
+				modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
       }
-      /*
-       * Increment the offset for each block between the hash bucket index
-       * and block of the empty slot
-       * */
-      uint64_t i;
-      for (i = hash_bucket_index / QF_SLOTS_PER_BLOCK + 1;
-           i <= empty_slot_index / QF_SLOTS_PER_BLOCK; i++) {
-        if (get_block(qf, i)->offset <
-            BITMASK(8 * sizeof(qf->blocks[0].offset)))
-          get_block(qf, i)->offset++;
-        assert(get_block(qf, i)->offset != 0);
+			else {  // use a tombstone
+				// modify_metadata(&qf->runtimedata->pc_n_tombstones, -1);
+			}
+
+			if (available_slot_index == insert_index) {
+				METADATA_WORD(qf, tombstones, insert_index)
+					&= ~(1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64));
       }
-      modify_metadata(&qf->runtimedata->pc_noccupied_slots, 1);
-      modify_metadata(&qf->runtimedata->pc_nelts, 1);
-    }
-    METADATA_WORD(qf, occupieds, hash_bucket_index) |=
-        1ULL << (hash_bucket_block_offset % 64);
-  }
-  if (GET_NO_LOCK(runtime_lock) != QF_NO_LOCK) {
-    qf_unlock(qf, hash_bucket_index, /*small*/ true);
-  }
-  return ret_distance;
+
+			shift_remainders(qf, insert_index, available_slot_index);
+
+			set_slot(qf, insert_index, new_value);
+			ret_distance = insert_index - hash_bucket_index;
+
+			shift_runends_tombstones(qf, insert_index, available_slot_index-1, 1);
+			switch (operation) {
+				case 0:  // Insert as a new run
+					METADATA_WORD(qf, runends, insert_index)   |= 1ULL << ((insert_index
+																																	%
+																																	QF_SLOTS_PER_BLOCK)
+																																 % 64);
+					METADATA_WORD(qf, tombstones, insert_index)
+						&= ~(1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64));
+					break;
+				case 1:  // Insert to the end of the run
+					METADATA_WORD(qf, runends, insert_index-1) &= ~(1ULL <<
+																													(((insert_index-1) %
+																														QF_SLOTS_PER_BLOCK) %
+																													 64));
+					METADATA_WORD(qf, runends, insert_index)   |= 1ULL << ((insert_index
+																																	%
+																																	QF_SLOTS_PER_BLOCK)
+																																 % 64);
+					METADATA_WORD(qf, tombstones, insert_index)
+						&= ~(1ULL << ((insert_index % QF_SLOTS_PER_BLOCK) % 64));
+					break;
+				case 2:  // Insert to the middle of the run
+					METADATA_WORD(qf, runends, insert_index)   &= ~(1ULL <<
+																													((insert_index %
+																														QF_SLOTS_PER_BLOCK) %
+																													 64));
+					break;
+				default:
+					fprintf(stderr, "Invalid operation %d\n", operation);
+					abort();
+			}
+			/* 
+			 * Increment the offset for each block between the hash bucket index
+			 * and block of the empty slot  
+			 * */
+			uint64_t i;
+			for (i = hash_bucket_index / QF_SLOTS_PER_BLOCK + 1; i <=
+					 available_slot_index/QF_SLOTS_PER_BLOCK; i++) {
+				if (get_block(qf, i)->offset < BITMASK(8*sizeof(qf->blocks[0].offset)))
+					get_block(qf, i)->offset++;
+				assert(get_block(qf, i)->offset != 0);
+			}
+		}
+		modify_metadata(&qf->runtimedata->pc_nelts, 1);
+		METADATA_WORD(qf, occupieds, hash_bucket_index) |= 1ULL <<
+			(hash_bucket_block_offset % 64);
+	}
+	if (GET_NO_LOCK(runtime_lock) != QF_NO_LOCK) {
+		qf_unlock(qf, hash_bucket_index, /*small*/ true);
+	}
+	return ret_distance;
 }
 
 int trhm_insert(RHM *qf, uint64_t key, uint64_t value, uint8_t flags) {
@@ -2970,13 +3181,13 @@ int trhm_insert(RHM *qf, uint64_t key, uint64_t value, uint8_t flags) {
     return QF_NO_SPACE;
   }
   if (GET_KEY_HASH(flags) != QF_KEY_IS_HASH) {
-    fprintf(stderr, "RobinHood HM assumes key is hash for now.");
+    fprintf(stderr, "RobinHood Tombstone HM assumes key is hash for now.");
     abort();
   }
   uint64_t hash = key;
   hash = (hash<< qf->metadata->value_bits) |
                   (value & BITMASK(qf->metadata->value_bits));
-  return rhm_insert1(qf, hash, flags);
+  return trhm_insert1(qf, hash, flags);
 }
 
 int trhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
@@ -2986,7 +3197,7 @@ int trhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
   }
   uint64_t hash = key;
   uint64_t hash_remainder = hash & BITMASK(qf->metadata->key_remainder_bits);
-  int64_t hash_bucket_index = hash >> qf->metadata->key_remainder_bits;
+  uint64_t hash_bucket_index = hash >> qf->metadata->key_remainder_bits;
 
   if (GET_NO_LOCK(flags) != QF_NO_LOCK) {
 		if (!qf_lock(qf, hash_bucket_index, /*small*/ false, flags))
@@ -3003,28 +3214,20 @@ int trhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
   int only_item_in_the_run = 0;
   uint64_t current_index = runstart_index;
   uint64_t current_remainder = get_slot_remainder(qf, current_index);
-  while (current_remainder < hash_remainder && !is_runend(qf, current_index)) {
-    	current_index = current_index + 1;
-		  current_remainder = get_slot_remainder(qf, current_index);
+  while (!is_runend(qf, current_index)) {
+    if (!is_tombstone(qf, current_index) && current_remainder >= hash_remainder) {
+      break;
+    }
+    current_index = current_index + 1;
+		current_remainder = get_slot_remainder(qf, current_index);
   }
-	if (current_remainder != hash_remainder)
+	if (current_remainder != hash_remainder) {
 		return QF_DOESNT_EXIST;
-
-  if (runstart_index == current_index && is_runend(qf, current_index))
-		only_item_in_the_run = 1;
-  uint64_t *p = 0x00; // The New Counter length is 0.
-  int ret_numfreedslots = remove_replace_slots_and_shift_remainders_and_runends_and_offsets(qf,
-																																		only_item_in_the_run,
-																																		hash_bucket_index,
-																																		current_index,
-																																		p,
-																																		0,
-																																		1);
-  modify_metadata(&qf->runtimedata->pc_nelts, -1);
-	if (GET_NO_LOCK(flags) != QF_NO_LOCK) {
-		qf_unlock(qf, hash_bucket_index, /*small*/ false);
-	}
-	return ret_numfreedslots;
+  }
+  METADATA_WORD(qf, tombstones, current_index) |= 1ULL << (current_index % 64);
+	modify_metadata(&qf->runtimedata->pc_nelts, -1);
+	modify_metadata(&qf->runtimedata->pc_noccupied_slots, -1);
+  return current_index - runstart_index + 1;
 
 }
 
@@ -3047,13 +3250,63 @@ int trhm_lookup(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags) {
   uint64_t current_slot_value, current_index, current_remainder, current_value;
   current_index = runstart_index;
   do {
-    current_slot_value = get_slot(qf, current_index);
-    current_remainder = current_slot_value >> qf->metadata->value_bits;
-    if (current_remainder == hash_remainder) {
-      *value = current_slot_value & BITMASK(qf->metadata->value_bits);
-      return (current_index - runstart_index + 1);
+    if (!is_tombstone(qf, current_index)) {
+      current_slot_value = get_slot(qf, current_index);
+      current_remainder = current_slot_value >> qf->metadata->value_bits;
+      if (current_remainder == hash_remainder) {
+        *value = current_slot_value & BITMASK(qf->metadata->value_bits);
+        return (current_index - runstart_index + 1);
+      }
     }
     current_index++;
   } while (!is_runend(qf, current_index - 1));
   return QF_DOESNT_EXIST;
+}
+
+uint64_t trhm_clear_tombstones_in_run(QF *qf, uint64_t home_slot, uint64_t run_start, uint8_t flags) {
+	uint64_t idx = run_start;
+	uint64_t runend_index = run_end(qf, home_slot);
+	while (idx <= runend_index) {
+		if (!is_tombstone(qf, idx)) {
+			idx++;
+			continue;
+		}
+		uint64_t tombstone_start = idx;
+		uint64_t tombstone_end = idx;
+		// TODO: There must be a more efficient way to find this.
+		while (is_tombstone(qf, tombstone_end) && tombstone_end <= runend_index) {
+			tombstone_end++;
+		}
+		int only_element = (tombstone_start == run_start && tombstone_end == runend_index+1);
+		// tombstone_end is one step ahead of the last tombstone in this cluster.
+		remove_tombstones(
+			qf, only_element, home_slot, tombstone_start, tombstone_end - tombstone_start
+		);
+		if (only_element) {
+			runend_index = run_start;
+			break;
+		}
+		runend_index -= (tombstone_end-tombstone_start);
+		idx++;
+	}
+	return runend_index;
+}
+
+int trhm_clear_tombstones(QF *qf, uint8_t flags) {
+	// TODO: Lock the whole Hashset.
+  printf("BEFORE CLEARING\n");
+  qf_dump(qf);
+	uint64_t run_start = 0;
+	uint64_t run_end = 0;
+	for (uint64_t idx=0; idx < qf->metadata->nslots; idx++) {
+		if (idx > run_start) {
+			run_start = idx;
+		}
+		if (is_occupied(qf, idx)) {
+			run_start = trhm_clear_tombstones_in_run(qf, idx, run_start, flags);
+			run_start++;
+		}
+	}
+  printf("AFTER CLEARING\n");
+  qf_dump(qf);
 }

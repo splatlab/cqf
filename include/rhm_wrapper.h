@@ -40,4 +40,9 @@ extern inline int g_rhm_destroy()
 	return rhm_free(&g_robinhood_hashmap);
 }
 
+extern inline int g_rhm_rebuild() {
+	// DO NOTHING.
+	return 0;
+}
+
 #endif

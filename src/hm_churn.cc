@@ -21,6 +21,8 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
+#include <fstream>
+#include <iostream>
 using namespace std;
 
 #include "include/rhm_wrapper.h"
@@ -34,6 +36,7 @@ typedef int (*init_op)(uint64_t nkeys, uint64_t key_bits, uint64_t value_bits);
 typedef int (*insert_op)(uint64_t key, uint64_t val);
 typedef int (*lookup_op)(uint64_t key, uint64_t *val);
 typedef int (*remove_op)(uint64_t key);
+typedef int (*rebuild_op)();
 typedef int (*destroy_op)();
 
 typedef struct hashmap {
@@ -41,13 +44,14 @@ typedef struct hashmap {
   insert_op insert;
   lookup_op lookup;
   remove_op remove;
+  rebuild_op rebuild;
   destroy_op destroy;
 } hashmap;
 
 hashmap rhm = {g_rhm_init, g_rhm_insert, g_rhm_lookup, g_rhm_remove,
-               g_rhm_destroy};
+               g_rhm_rebuild, g_rhm_destroy};
 hashmap trhm = {g_trhm_init, g_trhm_insert, g_trhm_lookup, g_trhm_remove,
-               g_trhm_destroy};
+               g_trhm_rebuild, g_trhm_destroy};
 
 uint64_t tv2msec(struct timeval tv) {
   uint64_t ret = tv.tv_sec * 1000 + tv.tv_usec / 1000;
@@ -65,7 +69,8 @@ void usage(char *name) {
          "per churn. Default 500. ]\n"
          "  -p npoints    [ number of points on the graph.  Default 20 ]\n"
          "  -d datastruct  [ Default rhm. ]\n"
-         "  -f outputfile  [ Default rhm. ]\n",
+         "  -f outputfile  [ default rhm. ]\n",
+         "  -y replay \n",
          name);
 }
 
@@ -74,6 +79,31 @@ struct hm_op {
   uint64_t key;
   uint64_t value;
 };
+
+std::vector<hm_op> load_ops() {
+  std::vector<hm_op> ops;
+  ifstream replay_file;
+  replay_file.open("replay.txt");
+  uint64_t num_keys;
+  replay_file >> num_keys;
+  for (int i=0; i<num_keys; i++) {
+    hm_op op;
+    replay_file >> op.op >> op.key >> op.value;
+    ops.push_back(op);
+  }
+  replay_file.close();
+  return ops;
+}
+
+std::vector<hm_op> write_ops(std::vector<hm_op> &ops) {
+  ofstream replay_file;
+  replay_file.open("replay.txt");
+  replay_file << ops.size() << std::endl;
+  for (auto op : ops) {
+    replay_file << op.op <<" "<<op.key<<" "<<op.value<<std::endl;
+  }
+  replay_file.close();
+}
 
 std::vector<hm_op> generate_ops(uint64_t num_preload_keys, int nchurns,
                                 int churn_len, int q_mul) {
@@ -165,9 +195,10 @@ int main(int argc, char **argv) {
 
   /* Argument parsing */
   int opt;
+  int replay = 0;
   char *term;
 
-  while ((opt = getopt(argc, argv, "n:r:p:m:d:a:f:i:v:s:c:l:")) != -1) {
+  while ((opt = getopt(argc, argv, "n:r:p:m:d:a:f:i:v:s:c:l:y:")) != -1) {
     switch (opt) {
     case 'n':
       nbits = strtol(optarg, &term, 10);
@@ -223,6 +254,9 @@ int main(int argc, char **argv) {
     case 'v':
       numkeys = (int)strtol(optarg, &term, 10);
       break;
+    case 'y':
+      replay = (int)strtol(optarg, &term, 10);
+      break;
     default:
       fprintf(stderr, "Unknown option\n");
       usage(argv[0]);
@@ -232,24 +266,24 @@ int main(int argc, char **argv) {
   }
   if (strcmp(datastruct, "rhm") == 0) {
     hashmap_ds = rhm;
-    } else if (strcmp(datastruct, "trhm") == 0) {
-    		hashmap_ds = trhm;
+  } else if (strcmp(datastruct, "trhm") == 0) {
+    hashmap_ds = trhm;
     //	} else if (strcmp(datastruct, "cf") == 0) {
     //		filter_ds = cf;
     //	} else if (strcmp(datastruct, "bf") == 0) {
     //		filter_ds = bf;
   } else {
-    fprintf(stderr, "Unknown randmode.\n");
+    fprintf(stderr, "Unknown datastruct.\n");
     usage(argv[0]);
     exit(1);
   }
 
   snprintf(filename_insert,
-           strlen(dir) + strlen(outputfile) + strlen(insert_op) + 1, "%s%s%s",
-           dir, outputfile, insert_op);
+           strlen(datastruct) + strlen(outputfile) + strlen(insert_op) + 1, "%s%s%s",
+           datastruct, outputfile, insert_op);
   snprintf(filename_churn,
-           strlen(dir) + strlen(outputfile) + strlen(churn_op) + 1, "%s%s%s",
-           dir, outputfile, churn_op);
+           strlen(datastruct) + strlen(outputfile) + strlen(churn_op) + 1, "%s%s%s",
+           datastruct, outputfile, churn_op);
 
   FILE *fp_insert = fopen(filename_insert, "w");
   FILE *fp_churn = fopen(filename_churn, "w");
@@ -262,31 +296,17 @@ int main(int argc, char **argv) {
   printf("Keys to insert: %lu\n", nkeys);
   for (run = 0; run < nruns; run++) {
     hashmap_ds.init(nslots, 32, 32);
-    std::vector<hm_op> ops = generate_ops(nkeys, nchurns, nchurn_ops, 1);
+    std::vector<hm_op> ops;
+    if (replay) {
+      ops = load_ops();
+    } else {
+        ops = generate_ops(nkeys, nchurns, nchurn_ops, 1);
+        write_ops(ops);
+    }
     sleep(5);
 
-    for (uint64_t warmup = 0; warmup < 2; warmup++) {
-      i = 0;
-      j = nkeys;
-      for (; i < j; i += 1 << 16) {
-        int nitems = j - i < 1 << 16 ? j - i : 1 << 16;
-        uint32_t keys[1 << 16];
-        uint32_t vals[1 << 16];
-        RAND_bytes((unsigned char *)keys, sizeof(uint32_t) * (1 << 16));
-        RAND_bytes((unsigned char *)vals, sizeof(uint32_t) * (1 << 16));
-
-        uint64_t lookup;
-        for (m = 0; m < nitems; m++) {
-          hashmap_ds.insert(keys[m], vals[m]);
-          hashmap_ds.lookup(keys[m], &lookup);
-          assert(lookup == vals[m]);
-        }
-        for (m = 0; m < nitems; m++) {
-          hashmap_ds.remove(keys[m]);
-        }
-      }
-    }
-
+    int rebuild_freq = 5;
+    int num_ops = 0;
     for (exp = 0; exp < 2 * npoints; exp += 2) {
       i = (exp / 2) * (nkeys / npoints);
       j = ((exp / 2) + 1) * (nkeys / npoints);
@@ -296,7 +316,9 @@ int main(int argc, char **argv) {
       uint64_t lookup_value;
       for (op_idx = i; op_idx < j; op_idx++) {
         auto op = ops[op_idx];
+        printf("%d %lx %lx\n", op.op, op.key, op.value);
         int ret = hashmap_ds.insert(op.key, op.value);
+        qf_dump(&g_trobinhood_hashmap);
         #if STRICT
         uint64_t lookup_value = 0;
         ret = hashmap_ds.lookup(op.key, &lookup_value);
@@ -308,8 +330,15 @@ int main(int argc, char **argv) {
       gettimeofday(&tv_insert[exp + 1][run], NULL);
     }
     for (; j < nkeys; j++) {
+      if (!num_ops) {
+        num_ops = rebuild_freq;
+        // hashmap_ds.rebuild();
+      }
+      num_ops--;
       auto op = ops[j];
+      printf("%d %lx %lx\n", op.op, op.key, op.value);
       int ret = hashmap_ds.insert(op.key, op.value);
+      qf_dump(&g_trobinhood_hashmap);
       #if STRICT
       if (ret < 0)
         exit(0);
@@ -328,6 +357,7 @@ int main(int argc, char **argv) {
       int ret;
       for (int op_idx = i; op_idx < j; op_idx++) {
         auto op = ops[op_idx + nkeys]; // nkeys is number of insert keys.
+        printf("%d %lx %lx\n", op.op, op.key, op.value);
         switch (op.op) {
         case 0:
           ret = hashmap_ds.insert(op.key, op.value);
@@ -351,7 +381,7 @@ int main(int argc, char **argv) {
           #if STRICT
           if (ret < 0) {
             printf("REMOVE_FAILED\n");
-            // qf_dump_long(&g_robinhood_hashmap);
+            qf_dump_long(&g_robinhood_hashmap);
             fflush(stdout);
             exit(0);
           }
@@ -363,14 +393,16 @@ int main(int argc, char **argv) {
           num_lookups++;
           #if STRICT
           if (ret < 0 || lookup_value != op.value) {
-            printf("LOOKUP_FAILED \n");
-            qf_dump_long(&g_robinhood_hashmap);
+            printf("%d LOOKUP_FAILED %lx %lx %lx\n", ret, op.key, op.value, lookup_value);
+            qf_dump_long(&g_trobinhood_hashmap);
+            qf_dump(&g_trobinhood_hashmap);
             fflush(stdout);
             exit(0);
           }
           #endif
           break;
         }
+        qf_dump(&g_trobinhood_hashmap);
       }
       gettimeofday(&tv_churn[exp + 1][run], NULL);
     }
