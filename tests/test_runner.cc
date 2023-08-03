@@ -5,6 +5,7 @@
 #include <set>
 #include <unistd.h>
 #include <vector>
+#include <cassert>
 #include "rhm_wrapper.h"
 #include "trhm_wrapper.h"
 
@@ -165,6 +166,21 @@ std::string replay_file = "test_case.txt";
 std::map<uint64_t, uint64_t> current_state;
 hashmap hm = rhm;
 
+void check_universe(uint64_t key_bits, std::map<uint64_t, uint64_t> expected, hashmap actual, bool check_equality = true) {
+  uint64_t value;
+  for (uint64_t k = 0; k < (1UL<<key_bits); k++) {
+    int key_exists = expected.find(k) != expected.end();
+    int ret = actual.lookup(k, &value);
+    if (key_exists) {
+      uint64_t expected_value = expected[k];
+      assert(ret >= 0);
+      if (check_equality) assert(expected_value == value);
+    } else {
+      assert(ret == QF_DOESNT_EXIST);
+    }
+  }
+}
+
 void usage(char *name) {
   printf("%s [OPTIONS]\n"
          "Options are:\n"
@@ -288,6 +304,7 @@ int main(int argc, char **argv) {
           fprintf(stderr, "Insert failed. Replay this testcase with ./test_case -d %s -r 1 -f %s\n", datastruct.c_str(), replay_file.c_str());
           abort();
         }
+        check_universe(key_bits, map, hm);
         break;
       case DELETE:
         key_exists = map.erase(key);
@@ -297,6 +314,7 @@ int main(int argc, char **argv) {
           fprintf(stderr, "Delete failed. Replay this testcase with ./test_case -d %s -r 1 -f %s\n", datastruct.c_str(), replay_file.c_str());
           abort();
         }
+        check_universe(key_bits, map, hm);
         break;
       case LOOKUP:
         ret = hm.lookup(key, &value);
