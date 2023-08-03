@@ -1329,11 +1329,12 @@ static inline void quotien_remainder(const QF *qf, const uint64_t hash,
   *remainder = hash & BITMASK(qf->metadata->key_remainder_bits);
 }
 
-/* Find the run and position of the hash if the hash is in the qf
+/* Find the index of the hash (quotient+remainder) and the range of the run.
+ * The range will be [run_start_index, run_end_index).
  * Return:
- * 		1: if found the hash, and set the index, run_start_index,
- * run_end_index 0: if didn't find the hash, the index would be the one to
- * insert
+ * 		1: if found it.
+ * run_end_index 
+ *    0: if didn't find it, the index and range would be where to insert it.
  */
 static int find(const QF *qf, const uint64_t quotient, const uint64_t remainder,
                 uint64_t *const index, uint64_t *const run_start_index,
@@ -1343,10 +1344,11 @@ static int find(const QF *qf, const uint64_t quotient, const uint64_t remainder,
     *run_start_index = run_end(qf, quotient - 1) + 1;
   *run_start_index = MAX(*run_start_index, quotient);
   if (!is_occupied(qf, quotient)) {
-    *index = *run_end_index = *run_start_index;
+    *index = *run_start_index;
+    *run_end_index = *run_start_index + 1;
     return 0;
   }
-  *run_end_index = run_end(qf, quotient);
+  *run_end_index = run_end(qf, quotient) + 1;
   uint64_t curr_remainder;
   *index = *run_start_index;
   do {
@@ -1358,7 +1360,7 @@ static int find(const QF *qf, const uint64_t quotient, const uint64_t remainder,
         return 0;
     }
     *index += 1;
-  } while (*index <= *run_end_index);
+  } while (*index < *run_end_index);
   return 0;
 }
 
@@ -1416,7 +1418,7 @@ static inline int _insert(QF *qf, uint64_t key, uint64_t value,
     if (!is_occupied(qf, hash_bucket_index)) {
       shift_runends_tombstones(qf, insert_index, available_slot_index, 1);
       SET_R(qf, insert_index);
-    } else if (insert_index > runend_index) {
+    } else if (insert_index >= runend_index) {
       shift_runends_tombstones(qf, insert_index - 1, available_slot_index, 1);
       // insert to the begin or middle
     } else {
@@ -2742,13 +2744,9 @@ int trhm_insert(RHM *qf, uint64_t key, uint64_t value, uint8_t flags) {
 }
 
 int trhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
-  if (GET_KEY_HASH(flags) != QF_KEY_IS_HASH) {
-    fprintf(stderr, "RobinHood HM assumes key is hash for now.");
-    abort();
-  }
-  uint64_t hash = key;
-  uint64_t hash_remainder = hash & BITMASK(qf->metadata->key_remainder_bits);
-  uint64_t hash_bucket_index = hash >> qf->metadata->key_remainder_bits;
+  uint64_t hash = key2hash(qf, key, flags);
+  uint64_t hash_remainder, hash_bucket_index;
+  quotien_remainder(qf, hash, &hash_bucket_index, &hash_remainder);
 
   if (GET_NO_LOCK(flags) != QF_NO_LOCK) {
 		if (!qf_lock(qf, hash_bucket_index, /*small*/ false, flags))
@@ -2759,25 +2757,34 @@ int trhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
   if (!is_occupied(qf, hash_bucket_index))
     return QF_DOESNT_EXIST;
 
-  uint64_t runstart_index =
-      hash_bucket_index == 0 ? 0 : run_end(qf, hash_bucket_index - 1) + 1;
-  uint64_t current_index = runstart_index;
-  uint64_t current_remainder = get_slot_remainder(qf, current_index);
-  while (!is_runend(qf, current_index)) {
-    if (!is_tombstone(qf, current_index) && current_remainder >= hash_remainder) {
-      break;
-    }
-    current_index = current_index + 1;
-		current_remainder = get_slot_remainder(qf, current_index);
-  }
-	if (current_remainder != hash_remainder) {
-		return QF_DOESNT_EXIST;
-  }
-  METADATA_WORD(qf, tombstones, current_index) |= 1ULL << (current_index % 64);
+  uint64_t current_index, runstart_index, runend_index;
+  int ret = find(qf, hash_bucket_index, hash_remainder, &current_index,
+                 &runstart_index, &runend_index);
+  // remainder not found
+  if (ret == 0)
+    return QF_DOESNT_EXIST;
+  
+  SET_T(qf, current_index);
 	modify_metadata(&qf->runtimedata->pc_nelts, -1);
-	modify_metadata(&qf->runtimedata->pc_noccupied_slots, -1);
-  return current_index - runstart_index + 1;
+  if (is_runend(qf, current_index)) {
+    RESET_R(qf, current_index);
+    // if it is the only element in the run
+    if (runend_index - runstart_index == 1) {
+      RESET_O(qf, hash_bucket_index);
+      modify_metadata(&qf->runtimedata->pc_noccupied_slots, -1);
+    }
+    else {
+      SET_R(qf, current_index-1);
+      if (is_empty(qf, current_index))
+        modify_metadata(&qf->runtimedata->pc_noccupied_slots, -1);
+    }
+  }
 
+  if (GET_NO_LOCK(flags) != QF_NO_LOCK) {
+    qf_unlock(qf, hash_bucket_index, /*small*/ false);
+  }
+
+  return current_index - runstart_index + 1;
 }
 
 int trhm_lookup(const QF *qf, uint64_t key, uint64_t *value, uint8_t flags) {
