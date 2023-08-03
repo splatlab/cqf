@@ -65,7 +65,7 @@ hm_churn:						$(OBJDIR)/hm_churn.o  $(OBJDIR)/gqf.o \
 										$(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 
-test_runner:						$(OBJDIR)/test_runner.o $(OBJDIR)/gqf.o \
+test_runner:				$(OBJDIR)/test_runner.o $(OBJDIR)/gqf.o \
 										$(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 
@@ -84,7 +84,7 @@ $(OBJDIR)/bm.o:								$(LOC_INCLUDE)/gqf_wrapper.h \
 
 $(OBJDIR)/hm_churn.o:					$(LOC_INCLUDE)/rhm_wrapper.h $(LOC_INCLUDE)/trhm_wrapper.h
 
-$(OBJDIR)/test_runner.o:					$(LOC_INCLUDE)/rhm_wrapper.h $(LOC_INCLUDE)/trhm_wrapper.h
+$(OBJDIR)/test_runner.o:			$(LOC_INCLUDE)/rhm_wrapper.h $(LOC_INCLUDE)/trhm_wrapper.h
 
 
 # dependencies between .o files and .cc (or .c) files

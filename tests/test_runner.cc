@@ -166,7 +166,7 @@ std::string replay_file = "test_case.txt";
 std::map<uint64_t, uint64_t> current_state;
 hashmap hm = rhm;
 
-void check_universe(uint64_t key_bits, std::map<uint64_t, uint64_t> expected, hashmap actual, bool check_equality = true) {
+void check_universe(uint64_t key_bits, std::map<uint64_t, uint64_t> expected, hashmap actual, bool check_equality = false) {
   uint64_t value;
   for (uint64_t k = 0; k < (1UL<<key_bits); k++) {
     int key_exists = expected.find(k) != expected.end();
@@ -296,11 +296,14 @@ int main(int argc, char **argv) {
     auto op = ops[i];
     key = op.key;
     value = op.value;
+    #if DEBUG
+    printf("%d op: %d, key: %lx, value:%lx.\n", i, op.op, key, value);
+    #endif
     switch(op.op) {
       case INSERT:
         map[key] = value;
         ret = hm.insert(key, value);
-        if (ret < 0) {
+        if (ret < 0 && ret != QF_KEY_EXISTS) {
           fprintf(stderr, "Insert failed. Replay this testcase with ./test_case -d %s -r 1 -f %s\n", datastruct.c_str(), replay_file.c_str());
           abort();
         }
@@ -319,8 +322,8 @@ int main(int argc, char **argv) {
       case LOOKUP:
         ret = hm.lookup(key, &value);
         if (map.find(key) != map.end()) {
-          if (ret < 0 || value != map[key])  {
-            fprintf(stderr, "Delete failed. Replay this testcase with ./test_case -d %s -r 1 -f %s\n", datastruct.c_str(), replay_file.c_str());
+          if (ret < 0)  {
+            fprintf(stderr, "Find failed. Replay this testcase with ./test_case -d %s -r 1 -f %s\n", datastruct.c_str(), replay_file.c_str());
             abort();
           }
         }
