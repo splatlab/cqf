@@ -687,6 +687,20 @@ static inline int probably_is_empty(const QF *qf, uint64_t slot_index) {
          !is_runend(qf, slot_index);
 }
 
+static inline uint64_t find_first_empty_slot(QF *qf, uint64_t from, uint64_t *empty_slot) {
+  do {
+    int t = offset_lower_bound(qf, from);
+    if (t < 0) {
+      return -1;
+    }
+    if (t == 0)
+      break;
+    from = from + t;
+  } while (1);
+  *empty_slot = from;
+  return 0;
+}
+
 /* Find the index of first tombstone, it can be empty or not empty. */
 static inline int find_first_tombstone(QF *qf, uint64_t from, uint64_t * tombstone_index) {
   uint64_t block_index = from / QF_SLOTS_PER_BLOCK;
@@ -870,6 +884,17 @@ void qf_dump_long(const QF *qf) {
   for (i = 0; i < qf->metadata->nblocks; i++) {
     qf_dump_block(qf, i);
   }
+}
+
+void check_runends_and_occupieds_are_equal(const QF *qf) {
+  uint64_t i;
+  uint64_t runend_bits = 0;
+  uint64_t occupied_bits = 0;
+  for (i = 0; i < qf->metadata->nblocks; i++) {
+    runend_bits += popcnt(*(get_block(qf, i)->runends));
+    occupied_bits += popcnt(*(get_block(qf, i)->occupieds));
+  }
+  assert(runend_bits == occupied_bits);
 }
 
 
@@ -1489,7 +1514,7 @@ uint64_t qf_init_advanced(QF *qf, uint64_t nslots, uint64_t key_bits,
   if (buffer == NULL || total_num_bytes > buffer_len)
     return total_num_bytes;
 
-  // memset(buffer, 0, total_num_bytes);
+  memset(buffer, 0, total_num_bytes);
   qf->metadata = (qfmetadata *)(buffer);
   qf->blocks = (qfblock *)(qf->metadata + 1);
 
@@ -2413,11 +2438,9 @@ static inline int rhm_insert1(QF *qf, __uint128_t hash, uint8_t runtime_lock) {
         modify_metadata(&qf->runtimedata->pc_nelts, 1);
     }
     if (operation >= 0) {
-        uint64_t empty_slot_index;
-        int ret = find_first_tombstone(qf, runend_index + 1, &empty_slot_index);
-        if (empty_slot_index >= qf->metadata->xnslots) {
-        return QF_NO_SPACE;
-      }
+      uint64_t empty_slot_index;
+      int ret = find_first_empty_slot(qf, runend_index + 1, &empty_slot_index);
+      if (ret < 0) return QF_NO_SPACE;
       shift_remainders(qf, insert_index, empty_slot_index);
       set_slot(qf, insert_index, new_value);
       ret_distance = insert_index - hash_bucket_index;
@@ -2478,7 +2501,11 @@ int rhm_insert(RHM *qf, uint64_t key, uint64_t value, uint8_t flags) {
   uint64_t hash = key;
   hash = (hash<< qf->metadata->value_bits) |
                   (value & BITMASK(qf->metadata->value_bits));
-  return rhm_insert1(qf, hash, flags);
+            
+  int ret = rhm_insert1(qf, hash, flags);
+  // TODO(chesetti): REMOVE BEFORE MERGING INTO MAIN!!!
+  check_runends_and_occupieds_are_equal(qf);
+  return ret;
 }
 
 int rhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
@@ -2525,6 +2552,8 @@ int rhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
 	if (GET_NO_LOCK(flags) != QF_NO_LOCK) {
 		qf_unlock(qf, hash_bucket_index, /*small*/ false);
 	}
+  // TODO(chesetti): REMOVE BEFORE MERGING INTO MAIN!!!
+  check_runends_and_occupieds_are_equal(qf);
 	return ret_numfreedslots;
 
 }
@@ -2740,7 +2769,9 @@ int trhm_insert(RHM *qf, uint64_t key, uint64_t value, uint8_t flags) {
   uint64_t hash = key;
   hash = (hash<< qf->metadata->value_bits) |
                   (value & BITMASK(qf->metadata->value_bits));
-  return trhm_insert1(qf, hash, flags);
+  int ret = trhm_insert1(qf, hash, flags);
+  check_runends_and_occupieds_are_equal(qf);
+  return ret;
 }
 
 int trhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
@@ -2784,6 +2815,8 @@ int trhm_remove(RHM *qf, uint64_t key, uint8_t flags) {
     qf_unlock(qf, hash_bucket_index, /*small*/ false);
   }
 
+  // TODO(chesetti): REMOVE BEFORE MERGING INTO MAIN!!!
+  check_runends_and_occupieds_are_equal(qf);
   return current_index - runstart_index + 1;
 }
 

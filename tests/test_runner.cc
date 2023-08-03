@@ -276,7 +276,8 @@ int main(int argc, char **argv) {
   hm.init((1ULL<<quotient_bits), key_bits, value_bits);
   uint64_t key, value;
   int ret, key_exists;
-  for (auto op: ops) {
+  for (int i=0; i < ops.size(); i++) {
+    auto op = ops[i];
     key = op.key;
     value = op.value;
     switch(op.op) {
@@ -289,9 +290,9 @@ int main(int argc, char **argv) {
         }
         break;
       case DELETE:
-        ret = hm.remove(key);
         key_exists = map.erase(key);
         printf("key_exists: %d\n", key_exists);
+        ret = hm.remove(key);
         if (key_exists && ret < 0) {
           fprintf(stderr, "Delete failed. Replay this testcase with ./test_case -d %s -r 1 -f %s\n", datastruct.c_str(), replay_file.c_str());
           abort();
