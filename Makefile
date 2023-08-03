@@ -1,4 +1,4 @@
-TARGETS=test test_threadsafe test_pc bm hm_churn
+TARGETS=test test_threadsafe test_pc bm hm_churn test_runner
 
 ifdef D
 	DEBUG=-g -DDEBUG=1
@@ -26,7 +26,7 @@ endif
 
 LOC_INCLUDE=include
 LOC_SRC=src
-LOC_TEST=test
+LOC_TEST=tests
 OBJDIR=obj
 
 CC = g++ -std=c++11
@@ -65,6 +65,10 @@ hm_churn:						$(OBJDIR)/hm_churn.o  $(OBJDIR)/gqf.o \
 										$(OBJDIR)/hashutil.o \
 										$(OBJDIR)/partitioned_counter.o
 
+test_runner:						$(OBJDIR)/test_runner.o $(OBJDIR)/gqf.o \
+										$(OBJDIR)/hashutil.o \
+										$(OBJDIR)/partitioned_counter.o
+
 # dependencies between .o files and .h files
 
 $(OBJDIR)/test.o: 						$(LOC_INCLUDE)/gqf.h \
@@ -79,6 +83,8 @@ $(OBJDIR)/bm.o:								$(LOC_INCLUDE)/gqf_wrapper.h \
 															$(LOC_INCLUDE)/partitioned_counter.h
 
 $(OBJDIR)/hm_churn.o:					$(LOC_INCLUDE)/rhm_wrapper.h $(LOC_INCLUDE)/trhm_wrapper.h
+
+$(OBJDIR)/test_runner.o:					$(LOC_INCLUDE)/rhm_wrapper.h $(LOC_INCLUDE)/trhm_wrapper.h
 
 
 # dependencies between .o files and .cc (or .c) files
@@ -100,7 +106,7 @@ $(OBJDIR)/%.o: $(LOC_SRC)/%.cc | $(OBJDIR)
 $(OBJDIR)/%.o: $(LOC_SRC)/%.c | $(OBJDIR)
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
-$(OBJDIR)/%.o: $(LOC_TEST)/%.c | $(OBJDIR)
+$(OBJDIR)/%.o: $(LOC_TEST)/%.cc | $(OBJDIR)
 	$(CC) $(CXXFLAGS) $(INCLUDE) $< -c -o $@
 
 $(OBJDIR):

@@ -16,5 +16,6 @@ plot_churn.png
 plot_insert.png
 .vscode/settings.json
 test
+test_runner
 test_pc
 test_threadsafe
